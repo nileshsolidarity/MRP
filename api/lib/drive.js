@@ -58,10 +58,19 @@ export async function downloadFileContent(fileId, mimeType) {
     return { content: res.data, exportedMimeType: googleMimeTypes[mimeType] };
   }
 
-  const res = await drive.files.get(
-    { fileId, alt: 'media' },
-    { responseType: 'arraybuffer' }
-  );
-
-  return { content: Buffer.from(res.data), exportedMimeType: mimeType };
+  try {
+    const res = await drive.files.get(
+      { fileId, alt: 'media' },
+      { responseType: 'arraybuffer' }
+    );
+    return { content: Buffer.from(res.data), exportedMimeType: mimeType };
+  } catch (downloadErr) {
+    // If direct download fails, try exporting as plain text (for converted docs)
+    console.log(`Direct download failed for ${fileId}, trying export as text:`, downloadErr.message);
+    const res = await drive.files.export(
+      { fileId, mimeType: 'text/plain' },
+      { responseType: 'text' }
+    );
+    return { content: res.data, exportedMimeType: 'text/plain' };
+  }
 }

@@ -51,14 +51,20 @@ async function extractText(content, mimeType) {
     try {
       const pdfParse = (await import('pdf-parse')).default;
       return (await pdfParse(content)).text;
-    } catch { return null; }
+    } catch (e) { console.error('PDF parse error:', e.message); return null; }
   }
   if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     try {
       const mammoth = await import('mammoth');
-      return (await mammoth.extractRawText({ buffer: content })).value;
-    } catch { return null; }
+      const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+      return (await mammoth.extractRawText({ buffer: buf })).value;
+    } catch (e) { console.error('DOCX parse error:', e.message); return null; }
   }
+  // Try as plain text as fallback
+  try {
+    const str = content.toString('utf-8');
+    if (str && str.trim().length > 10 && !str.includes('\x00')) return str;
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -122,9 +128,15 @@ async function handleSync(req, res, branch) {
       const existing = store.documents.find((d) => d.drive_file_id === file.id);
       if (existing && existing.last_modified === file.modifiedTime) continue;
       try {
+        console.log(`Processing file: ${file.name}, mimeType: ${file.mimeType}`);
         const { content, exportedMimeType } = await downloadFileContent(file.id, file.mimeType);
+        console.log(`Downloaded: ${file.name}, exportedMimeType: ${exportedMimeType}, contentType: ${typeof content}, contentLength: ${content?.length || content?.byteLength || 0}`);
         const text = await extractText(content, exportedMimeType);
-        if (!text || text.trim().length < 10) continue;
+        console.log(`Extracted text for ${file.name}: ${text ? text.substring(0, 100) + '...' : 'NULL'}`);
+        if (!text || text.trim().length < 10) {
+          console.log(`Skipping ${file.name}: text too short or null`);
+          continue;
+        }
         const category = inferCategory(file.name);
         if (existing) {
           Object.assign(existing, { title: file.name, category, mime_type: file.mimeType, drive_url: file.webViewLink, content_text: text, file_size: parseInt(file.size || '0'), last_modified: file.modifiedTime, synced_at: new Date().toISOString() });
