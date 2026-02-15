@@ -214,6 +214,25 @@ export default async function handler(req, res) {
     const folderId = getDriveFolderId();
     return res.json({ status: 'ok', timestamp: new Date().toISOString(), folderIdLength: folderId ? folderId.length : 0, folderIdPreview: folderId ? folderId.substring(0, 5) + '...' : 'NOT SET' });
   }
+  if (url === '/api/debug-sync' && req.method === 'POST') {
+    try {
+      const files = await listFiles();
+      const store = loadStore();
+      const results = [];
+      for (const file of files) {
+        const existing = store.documents.find((d) => d.drive_file_id === file.id);
+        let status = 'new';
+        if (existing && existing.last_modified === file.modifiedTime) status = 'skipped (unchanged)';
+        else if (existing) status = 'update needed';
+        try {
+          const { content, exportedMimeType } = await downloadFileContent(file.id, file.mimeType);
+          const text = await extractText(content, exportedMimeType);
+          results.push({ name: file.name, mimeType: file.mimeType, exportedMimeType, contentType: typeof content, contentLength: content?.length || content?.byteLength || 0, textLength: text ? text.length : 0, textPreview: text ? text.substring(0, 200) : 'NULL', status });
+        } catch (e) { results.push({ name: file.name, mimeType: file.mimeType, error: e.message, status }); }
+      }
+      return res.json({ filesFound: files.length, existingDocs: store.documents.length, existingChunks: store.chunks.length, results });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
 
   // Protected routes
   const branch = requireAuth(req, res);
