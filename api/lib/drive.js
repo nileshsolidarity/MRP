@@ -21,9 +21,7 @@ function getDrive() {
   return driveClient;
 }
 
-export async function listFiles() {
-  const drive = getDrive();
-  const folderId = getDriveFolderId();
+async function listFilesInFolder(drive, folderId) {
   const files = [];
   let pageToken = null;
 
@@ -39,6 +37,35 @@ export async function listFiles() {
   } while (pageToken);
 
   return files;
+}
+
+export async function listFiles() {
+  const drive = getDrive();
+  const folderId = getDriveFolderId();
+  const allFiles = [];
+
+  // Get top-level items
+  const topLevel = await listFilesInFolder(drive, folderId);
+
+  for (const item of topLevel) {
+    if (item.mimeType === 'application/vnd.google-apps.folder') {
+      // Recursively get files from subfolders
+      const subFiles = await listFilesInFolder(drive, item.id);
+      for (const subItem of subFiles) {
+        if (subItem.mimeType === 'application/vnd.google-apps.folder') {
+          // Go one more level deep
+          const subSubFiles = await listFilesInFolder(drive, subItem.id);
+          allFiles.push(...subSubFiles.filter(f => f.mimeType !== 'application/vnd.google-apps.folder'));
+        } else {
+          allFiles.push(subItem);
+        }
+      }
+    } else {
+      allFiles.push(item);
+    }
+  }
+
+  return allFiles;
 }
 
 export async function downloadFileContent(fileId, mimeType) {
