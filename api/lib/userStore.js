@@ -104,8 +104,12 @@ export async function loadUsers() {
 
 export async function saveUsers(users) {
   writeFileSync(USERS_PATH, JSON.stringify(users));
-  // Async backup to Drive (don't await to keep response fast)
-  uploadUsersToDrive(users).catch(err => console.error('Drive backup failed:', err.message));
+  // Await Drive backup to ensure data is available across serverless instances
+  try {
+    await uploadUsersToDrive(users);
+  } catch (err) {
+    console.error('Drive backup failed:', err.message);
+  }
 }
 
 export async function findUserByEmail(email) {
