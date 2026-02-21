@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { google } from 'googleapis';
-import { getServiceAccountCredentials, getDriveFolderId } from './config.js';
+import { getServiceAccountCredentials, getDriveFolderId, getResendApiKey, getAppUrl } from './config.js';
 
 const USERS_PATH = '/tmp/mrp-users.json';
 const DRIVE_FILENAME = 'mrp-users-data.json';
@@ -184,8 +184,16 @@ export async function debugUsers() {
     folderFiles = (listRes.data.files || []).map(f => ({ name: f.name, mimeType: f.mimeType, id: f.id.substring(0, 8) + '...' }));
   } catch (e) { folderFiles = [{ error: e.message }]; }
 
+  const resendKey = getResendApiKey();
+  const appUrl = getAppUrl();
+
   return {
     config: { folderId: folderId ? `${folderId.substring(0, 8)}...` : 'NOT SET', hasServiceAccount: hasCreds, serviceAccountEmail },
+    email: {
+      resendApiKey: resendKey ? `${resendKey.substring(0, 8)}...configured` : 'NOT SET — emails will NOT work!',
+      appUrl,
+      adminEmails: ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com', 'ceo@clubconcierge.com'],
+    },
     tmp: { exists: !!tmpData, userCount: Array.isArray(tmpData) ? tmpData.length : 0, users: Array.isArray(tmpData) ? tmpData.map(u => ({ email: u.email, status: u.status })) : tmpData },
     drive: { fileId: driveFileId || 'NOT FOUND', error: driveError, userCount: Array.isArray(driveData) ? driveData.length : 0, users: Array.isArray(driveData) ? driveData.map(u => ({ email: u.email, status: u.status })) : null },
     testWrite: testWriteResult,
