@@ -28,3 +28,7 @@ export function getAppUrl() {
 export function getHrApprovalEmail() {
   return process.env.HR_APPROVAL_EMAIL || 'anthony.okoro@clubconcierge.com';
 }
+
+export function getAdminEmails() {
+  return ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com'];
+}

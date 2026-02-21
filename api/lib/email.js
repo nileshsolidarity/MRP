@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { getResendApiKey, getHrApprovalEmail } from './config.js';
+import { getResendApiKey, getAdminEmails } from './config.js';
 
 function getResend() {
   const key = getResendApiKey();
@@ -9,11 +9,11 @@ function getResend() {
 
 export async function sendApprovalEmail(applicantName, applicantEmail, approvalUrl) {
   const resend = getResend();
-  const hrEmail = getHrApprovalEmail();
+  const adminEmails = getAdminEmails();
 
   await resend.emails.send({
     from: 'Gotravelcc <onboarding@resend.dev>',
-    to: hrEmail,
+    to: adminEmails,
     subject: `Employee Registration Approval: ${applicantName}`,
     html: `
 <!DOCTYPE html>
