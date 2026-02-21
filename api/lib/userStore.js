@@ -24,9 +24,10 @@ function getDriveWrite() {
 async function findDriveFile() {
   try {
     const drive = getDriveWrite();
-    // Search service account's entire Drive for the users file (not limited to shared folder)
+    const folderId = getDriveFolderId();
+    // Search in the shared folder (which has storage quota, unlike service account root)
     const res = await drive.files.list({
-      q: `name = '${DRIVE_FILENAME}' and trashed = false`,
+      q: `name = '${DRIVE_FILENAME}' and '${folderId}' in parents and trashed = false`,
       fields: 'files(id, name)',
       pageSize: 1,
     });
@@ -53,6 +54,7 @@ async function downloadUsersFromDrive() {
 
 async function uploadUsersToDrive(users) {
   const drive = getDriveWrite();
+  const folderId = getDriveFolderId();
   const content = JSON.stringify(users, null, 2);
   const fileId = await findDriveFile();
 
@@ -63,15 +65,16 @@ async function uploadUsersToDrive(users) {
     });
     console.log('Users saved to Drive (updated existing file)');
   } else {
-    // Create in service account's own Drive root (no parent folder — avoids permission issues)
+    // Create in the shared folder (service accounts have no storage quota of their own)
     await drive.files.create({
       requestBody: {
         name: DRIVE_FILENAME,
         mimeType: 'application/json',
+        parents: [folderId],
       },
       media: { mimeType: 'application/json', body: content },
     });
-    console.log('Users saved to Drive (created new file in service account root)');
+    console.log('Users saved to Drive (created new file in shared folder)');
   }
 }
 
