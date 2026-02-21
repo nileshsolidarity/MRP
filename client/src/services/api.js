@@ -67,3 +67,13 @@ export const chatApi = {
   getSessions: () => request('/chat/sessions'),
   getMessages: (sessionId) => request(`/chat/sessions/${sessionId}/messages`),
 };
+
+// Tests
+export const testApi = {
+  generate: (processId) => request(`/tests/generate/${processId}`, { method: 'POST' }),
+  getQuestions: (processId) => request(`/tests/questions/${processId}`),
+  submit: (processId, answers) => request(`/tests/submit/${processId}`, { method: 'POST', body: JSON.stringify({ answers }) }),
+  getAttempts: (processId) => request(`/tests/attempts/${processId}`),
+  getLeaderboard: (processId) => request(`/tests/leaderboard/${processId}`),
+  getGlobalLeaderboard: () => request('/tests/leaderboard'),
+};

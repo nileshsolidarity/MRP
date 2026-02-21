@@ -6,6 +6,8 @@ import Home from './pages/Home';
 import Processes from './pages/Processes';
 import ProcessDetail from './pages/ProcessDetail';
 import Chat from './pages/Chat';
+import TestPage from './pages/TestPage';
+import Leaderboard from './pages/Leaderboard';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -42,7 +44,9 @@ function App() {
             <Route index element={<Home />} />
             <Route path="processes" element={<Processes />} />
             <Route path="processes/:id" element={<ProcessDetail />} />
+            <Route path="processes/:id/test" element={<TestPage />} />
             <Route path="chat" element={<Chat />} />
+            <Route path="leaderboard" element={<Leaderboard />} />
           </Route>
         </Routes>
       </BrowserRouter>

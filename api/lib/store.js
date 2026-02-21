@@ -11,7 +11,9 @@ const DEFAULT_STORE = {
   ],
   chatSessions: [],
   chatMessages: [],
-  nextId: { documents: 1, chunks: 1, chatSessions: 1, chatMessages: 1 },
+  testQuestions: [],
+  testAttempts: [],
+  nextId: { documents: 1, chunks: 1, chatSessions: 1, chatMessages: 1, testQuestions: 1, testAttempts: 1 },
 };
 
 export function loadStore() {
@@ -20,6 +22,11 @@ export function loadStore() {
       const store = JSON.parse(readFileSync(STORE_PATH, 'utf-8'));
       // Always use latest branch list from defaults
       store.branches = DEFAULT_STORE.branches;
+      // Ensure new collections exist for existing stores
+      if (!store.testQuestions) store.testQuestions = [];
+      if (!store.testAttempts) store.testAttempts = [];
+      if (!store.nextId.testQuestions) store.nextId.testQuestions = 1;
+      if (!store.nextId.testAttempts) store.nextId.testAttempts = 1;
       return store;
     }
   } catch {

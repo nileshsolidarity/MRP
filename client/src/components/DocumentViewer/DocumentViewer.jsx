@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { processApi } from '../../services/api';
-import { ArrowLeft, ExternalLink, Calendar, Tag, FileText, Loader2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Calendar, Tag, FileText, Loader2, ClipboardCheck } from 'lucide-react';
 
 export default function DocumentViewer() {
   const { id } = useParams();
@@ -72,17 +72,26 @@ export default function DocumentViewer() {
                 </div>
               </div>
             </div>
-            {doc.drive_url && (
-              <a
-                href={doc.drive_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/processes/${doc.id}/test`}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition"
               >
-                <ExternalLink size={14} />
-                Open in Drive
-              </a>
-            )}
+                <ClipboardCheck size={14} />
+                Take Test
+              </Link>
+              {doc.drive_url && (
+                <a
+                  href={doc.drive_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+                >
+                  <ExternalLink size={14} />
+                  Open in Drive
+                </a>
+              )}
+            </div>
           </div>
         </div>
       </div>

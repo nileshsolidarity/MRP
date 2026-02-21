@@ -3,7 +3,8 @@ import { createToken, requireAuth } from './lib/auth.js';
 import { listFiles, downloadFileContent } from './lib/drive.js';
 import { generateEmbeddings } from './lib/embedding.js';
 import { generateRagResponse } from './lib/rag.js';
-import { getDriveFolderId } from './lib/config.js';
+import { getDriveFolderId, getGeminiApiKey } from './lib/config.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const config = { maxDuration: 60 };
 
@@ -66,6 +67,69 @@ async function extractText(content, mimeType) {
     if (str && str.trim().length > 10 && !str.includes('\x00')) return str;
   } catch { /* ignore */ }
   return null;
+}
+
+// --- Test utilities ---
+
+function simpleHash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return String(Math.abs(hash));
+}
+
+function normalizeAnswer(str) {
+  return str.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+}
+
+function buildTestPrompt(docTitle, contentText) {
+  const truncated = contentText.substring(0, 8000);
+  return `You are a corporate training assessment generator. Based on the following company process document, generate exactly 10 test questions to evaluate an employee's understanding.
+
+DOCUMENT TITLE: "${docTitle}"
+
+DOCUMENT CONTENT:
+${truncated}
+
+REQUIREMENTS:
+- Generate exactly 10 questions
+- Mix of question types: 5 Multiple Choice, 3 True/False, 2 Short Answer
+- Questions should test comprehension of key procedures, policies, and facts from the document
+- Multiple Choice questions must have exactly 4 options labeled A, B, C, D with only 1 correct answer
+- True/False questions should test common misconceptions or important facts
+- Short Answer questions should have brief 1-5 word answers (not sentences)
+- Include a brief explanation for each correct answer
+- Questions should progress from basic recall to applied understanding
+
+RESPOND WITH ONLY a valid JSON array (no markdown, no explanation), in this exact format:
+[
+  {
+    "index": 0,
+    "type": "multiple_choice",
+    "question": "What is the first step in the onboarding process?",
+    "options": ["A. Submit paperwork", "B. Meet the team", "C. Complete training", "D. Set up workstation"],
+    "correct_answer": "A. Submit paperwork",
+    "explanation": "According to the document, submitting paperwork is listed as step 1."
+  },
+  {
+    "index": 1,
+    "type": "true_false",
+    "question": "All employees must complete safety training within 30 days.",
+    "options": ["True", "False"],
+    "correct_answer": "True",
+    "explanation": "The document states safety training must be completed within 30 days."
+  },
+  {
+    "index": 2,
+    "type": "short_answer",
+    "question": "What department handles expense report approvals?",
+    "options": null,
+    "correct_answer": "Finance",
+    "explanation": "The Finance department approves all expense reports as stated in section 3."
+  }
+]`;
 }
 
 // --- Route handlers ---
@@ -199,6 +263,165 @@ async function handleChat(req, res, branch) {
   res.end();
 }
 
+// --- Test handlers ---
+
+async function handleTestGenerate(req, res, branch, documentId) {
+  const store = loadStore();
+  const doc = store.documents.find(d => d.id === parseInt(documentId));
+  if (!doc) return res.status(404).json({ error: 'Process not found' });
+  if (!doc.content_text || doc.content_text.trim().length < 50)
+    return res.status(400).json({ error: 'Document has insufficient content to generate a test' });
+
+  const docHash = simpleHash(doc.content_text.substring(0, 5000));
+  let existing = store.testQuestions.find(tq => tq.document_id === parseInt(documentId));
+
+  if (existing && existing.document_hash === docHash) {
+    return res.json({
+      document_id: existing.document_id,
+      questions: existing.questions.map(({ correct_answer, explanation, ...q }) => q),
+      generated_at: existing.generated_at,
+      cached: true
+    });
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(getGeminiApiKey());
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = buildTestPrompt(doc.title, doc.content_text);
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    const jsonStr = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const questions = JSON.parse(jsonStr);
+
+    if (!Array.isArray(questions) || questions.length < 5) {
+      throw new Error('Invalid question format from AI');
+    }
+
+    if (existing) {
+      Object.assign(existing, { questions, generated_at: new Date().toISOString(), document_hash: docHash });
+    } else {
+      store.testQuestions.push({
+        id: getNextId(store, 'testQuestions'),
+        document_id: parseInt(documentId),
+        questions,
+        generated_at: new Date().toISOString(),
+        document_hash: docHash
+      });
+    }
+    saveStore(store);
+
+    res.json({
+      document_id: parseInt(documentId),
+      questions: questions.map(({ correct_answer, explanation, ...q }) => q),
+      generated_at: new Date().toISOString(),
+      cached: false
+    });
+  } catch (err) {
+    console.error('Test generation error:', err);
+    res.status(500).json({ error: 'Failed to generate test questions: ' + err.message });
+  }
+}
+
+function handleTestQuestions(req, res, branch, documentId) {
+  const store = loadStore();
+  const testQ = store.testQuestions.find(tq => tq.document_id === parseInt(documentId));
+  if (!testQ) return res.status(404).json({ error: 'No test found. Generate one first.' });
+  res.json({
+    document_id: testQ.document_id,
+    questions: testQ.questions.map(({ correct_answer, explanation, ...q }) => q),
+    generated_at: testQ.generated_at
+  });
+}
+
+function handleTestSubmit(req, res, branch, documentId) {
+  const { answers } = req.body || {};
+  if (!answers || !Array.isArray(answers))
+    return res.status(400).json({ error: 'Answers array is required' });
+
+  const store = loadStore();
+  const testQ = store.testQuestions.find(tq => tq.document_id === parseInt(documentId));
+  if (!testQ) return res.status(404).json({ error: 'No test found. Generate one first.' });
+
+  let score = 0;
+  const results = testQ.questions.map((q, i) => {
+    const userAnswer = answers.find(a => a.index === i)?.answer || '';
+    let isCorrect = false;
+
+    if (q.type === 'short_answer') {
+      const normalUser = normalizeAnswer(userAnswer);
+      const normalCorrect = normalizeAnswer(q.correct_answer);
+      isCorrect = normalUser === normalCorrect || normalCorrect.includes(normalUser) || normalUser.includes(normalCorrect);
+      if (normalUser.length < 2) isCorrect = false;
+    } else {
+      isCorrect = userAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+    }
+
+    if (isCorrect) score++;
+    return { index: i, question: q.question, type: q.type, user_answer: userAnswer, correct_answer: q.correct_answer, explanation: q.explanation, is_correct: isCorrect };
+  });
+
+  const total = testQ.questions.length;
+  const percentage = Math.round((score / total) * 100);
+  const attempt = {
+    id: getNextId(store, 'testAttempts'),
+    document_id: parseInt(documentId),
+    branch_id: branch.branchId,
+    branch_name: branch.name,
+    branch_code: branch.code,
+    score, total, percentage,
+    passed: percentage >= 80,
+    answers: results,
+    completed_at: new Date().toISOString()
+  };
+
+  store.testAttempts.push(attempt);
+  saveStore(store);
+  res.json(attempt);
+}
+
+function handleTestAttempts(req, res, branch, documentId) {
+  const store = loadStore();
+  const attempts = store.testAttempts
+    .filter(a => a.document_id === parseInt(documentId) && a.branch_id === branch.branchId)
+    .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+  res.json(attempts);
+}
+
+function handleTestLeaderboard(req, res, branch, documentId) {
+  const store = loadStore();
+  const attempts = store.testAttempts.filter(a => a.document_id === parseInt(documentId));
+  const bestByBranch = {};
+  for (const a of attempts) {
+    if (!bestByBranch[a.branch_id] || a.percentage > bestByBranch[a.branch_id].percentage) {
+      bestByBranch[a.branch_id] = a;
+    }
+  }
+  const leaderboard = Object.values(bestByBranch)
+    .sort((a, b) => b.percentage - a.percentage || new Date(a.completed_at) - new Date(b.completed_at))
+    .map((a, i) => ({ rank: i + 1, branch_name: a.branch_name, branch_code: a.branch_code, score: a.score, total: a.total, percentage: a.percentage, passed: a.passed, completed_at: a.completed_at }));
+  res.json(leaderboard);
+}
+
+function handleGlobalLeaderboard(req, res, branch) {
+  const store = loadStore();
+  const bestScores = {};
+  for (const a of store.testAttempts) {
+    if (!bestScores[a.branch_id]) bestScores[a.branch_id] = {};
+    const existing = bestScores[a.branch_id][a.document_id];
+    if (!existing || a.percentage > existing.percentage) {
+      bestScores[a.branch_id][a.document_id] = a;
+    }
+  }
+  const leaderboard = Object.entries(bestScores).map(([, docs]) => {
+    const attempts = Object.values(docs);
+    const avgPercentage = Math.round(attempts.reduce((sum, a) => sum + a.percentage, 0) / attempts.length);
+    const sample = attempts[0];
+    return { branch_name: sample.branch_name, branch_code: sample.branch_code, tests_taken: attempts.length, average_percentage: avgPercentage, tests_passed: attempts.filter(a => a.passed).length };
+  }).sort((a, b) => b.average_percentage - a.average_percentage);
+  leaderboard.forEach((entry, i) => entry.rank = i + 1);
+  res.json(leaderboard);
+}
+
 // --- Main router ---
 
 export default async function handler(req, res) {
@@ -242,6 +465,24 @@ export default async function handler(req, res) {
   if (url === '/api/processes' && req.method === 'GET') return handleProcesses(req, res, branch);
   if (url === '/api/sync' && req.method === 'POST') return handleSync(req, res, branch);
   if (url === '/api/chat' && req.method === 'POST') return handleChat(req, res, branch);
+
+  // Test routes
+  const testGenerateMatch = url.match(/^\/api\/tests\/generate\/(\d+)$/);
+  if (testGenerateMatch && req.method === 'POST') return handleTestGenerate(req, res, branch, testGenerateMatch[1]);
+
+  const testQuestionsMatch = url.match(/^\/api\/tests\/questions\/(\d+)$/);
+  if (testQuestionsMatch && req.method === 'GET') return handleTestQuestions(req, res, branch, testQuestionsMatch[1]);
+
+  const testSubmitMatch = url.match(/^\/api\/tests\/submit\/(\d+)$/);
+  if (testSubmitMatch && req.method === 'POST') return handleTestSubmit(req, res, branch, testSubmitMatch[1]);
+
+  const testAttemptsMatch = url.match(/^\/api\/tests\/attempts\/(\d+)$/);
+  if (testAttemptsMatch && req.method === 'GET') return handleTestAttempts(req, res, branch, testAttemptsMatch[1]);
+
+  const testLeaderboardMatch = url.match(/^\/api\/tests\/leaderboard\/(\d+)$/);
+  if (testLeaderboardMatch && req.method === 'GET') return handleTestLeaderboard(req, res, branch, testLeaderboardMatch[1]);
+
+  if (url === '/api/tests/leaderboard' && req.method === 'GET') return handleGlobalLeaderboard(req, res, branch);
 
   // Dynamic route: /api/processes/:id
   const processMatch = url.match(/^\/api\/processes\/(\d+)$/);
