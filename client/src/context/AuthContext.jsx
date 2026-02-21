@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
-const ADMIN_EMAILS = ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com'];
+const ADMIN_EMAILS = ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com', 'ceo@clubconcierge.com'];
 
 export function AuthProvider({ children }) {
   const [branch, setBranch] = useState(null);

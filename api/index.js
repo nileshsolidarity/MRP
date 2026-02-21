@@ -137,7 +137,7 @@ RESPOND WITH ONLY a valid JSON array (no markdown, no explanation), in this exac
 }
 
 // --- Admin emails ---
-const ADMIN_EMAILS = ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com'];
+const ADMIN_EMAILS = ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com', 'ceo@clubconcierge.com'];
 
 function isAdmin(branch) {
   return branch.email && ADMIN_EMAILS.includes(branch.email.toLowerCase());

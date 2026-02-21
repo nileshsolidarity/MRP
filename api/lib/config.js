@@ -30,5 +30,5 @@ export function getHrApprovalEmail() {
 }
 
 export function getAdminEmails() {
-  return ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com'];
+  return ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com', 'ceo@clubconcierge.com'];
 }
