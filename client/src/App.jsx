@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
+import Register from './pages/Register';
+import SetPassword from './pages/SetPassword';
 import Home from './pages/Home';
 import Processes from './pages/Processes';
 import ProcessDetail from './pages/ProcessDetail';
@@ -35,6 +37,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/set-password/:token" element={<SetPassword />} />
           <Route
             path="/"
             element={

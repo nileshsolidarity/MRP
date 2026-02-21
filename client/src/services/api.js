@@ -22,6 +22,7 @@ async function request(url, options = {}) {
   if (res.status === 401) {
     localStorage.removeItem('token');
     localStorage.removeItem('branch');
+    localStorage.removeItem('user');
     window.location.href = '/login';
     throw new Error('Unauthorized');
   }
@@ -36,7 +37,9 @@ async function request(url, options = {}) {
 
 // Auth
 export const authApi = {
-  login: (code) => request('/auth/login', { method: 'POST', body: JSON.stringify({ code }) }),
+  login: (email, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  register: (email, name) => request('/auth/register', { method: 'POST', body: JSON.stringify({ email, name }) }),
+  setPassword: (token, password) => request('/auth/set-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
   getBranches: () => request('/auth/branches'),
 };
 

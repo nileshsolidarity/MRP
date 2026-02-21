@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { processApi } from '../../services/api';
 
 export default function Header() {
-  const { branch, logout } = useAuth();
+  const { branch, user, logout } = useAuth();
   const [syncing, setSyncing] = useState(false);
 
   const handleSync = async () => {
@@ -42,8 +42,17 @@ export default function Header() {
         </button>
 
         <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span className="bg-gray-100 px-2 py-1 rounded">{branch?.code}</span>
-          <span className="hidden sm:inline">{branch?.name}</span>
+          {user ? (
+            <>
+              <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded font-medium">{user.name}</span>
+              <span className="hidden sm:inline text-gray-400">{user.email}</span>
+            </>
+          ) : (
+            <>
+              <span className="bg-gray-100 px-2 py-1 rounded">{branch?.code}</span>
+              <span className="hidden sm:inline">{branch?.name}</span>
+            </>
+          )}
         </div>
 
         <button

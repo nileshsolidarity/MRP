@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../services/api';
-import { Building2, LogIn, Loader2 } from 'lucide-react';
+import { Building2, LogIn, Loader2, Mail, Lock } from 'lucide-react';
 
 export default function Login() {
-  const [branches, setBranches] = useState([]);
-  const [selectedCode, setSelectedCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, isAuthenticated } = useAuth();
@@ -16,25 +16,21 @@ export default function Login() {
     if (isAuthenticated) navigate('/', { replace: true });
   }, [isAuthenticated, navigate]);
 
-  useEffect(() => {
-    authApi.getBranches().then(setBranches).catch(() => {});
-  }, []);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedCode) {
-      setError('Please select or enter a branch code');
+    if (!email || !password) {
+      setError('Please enter your email and password');
       return;
     }
     setError('');
     setLoading(true);
 
     try {
-      const { token, branch } = await authApi.login(selectedCode);
-      login(token, branch);
+      const { token, branch, user } = await authApi.login(email, password);
+      login(token, branch, user);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err.message || 'Invalid branch code');
+      setError(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -48,41 +44,40 @@ export default function Login() {
             <Building2 size={32} />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">MRP Group</h1>
-          <p className="text-gray-500 mt-1">Process Repository - Sign in with your branch code</p>
+          <p className="text-gray-500 mt-1">Process Repository - Sign in to continue</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {branches.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Branch
-              </label>
-              <select
-                value={selectedCode}
-                onChange={(e) => setSelectedCode(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Choose a branch --</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.code}>
-                    {b.name} ({b.code})
-                  </option>
-                ))}
-              </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@gotravelcc.com"
+                className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-          )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Or enter branch code
+              Password
             </label>
-            <input
-              type="text"
-              value={selectedCode}
-              onChange={(e) => setSelectedCode(e.target.value.toUpperCase())}
-              placeholder="e.g. HO001"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
-            />
+            <div className="relative">
+              <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           {error && (
@@ -91,7 +86,7 @@ export default function Login() {
 
           <button
             type="submit"
-            disabled={loading || !selectedCode}
+            disabled={loading || !email || !password}
             className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
           >
             {loading ? (
@@ -102,6 +97,15 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-500">
+            New employee?{' '}
+            <Link to="/register" className="text-blue-600 hover:underline font-medium">
+              Register here
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

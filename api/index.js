@@ -1,11 +1,14 @@
 import { loadStore, saveStore, getNextId } from './lib/store.js';
-import { createToken, requireAuth } from './lib/auth.js';
+import { createToken, requireAuth, createUserToken, createPurposeToken, verifyPurposeToken } from './lib/auth.js';
 import { listFiles, downloadFileContent } from './lib/drive.js';
 import { generateEmbeddings } from './lib/embedding.js';
 import { generateRagResponse } from './lib/rag.js';
-import { getDriveFolderId, getGeminiApiKey } from './lib/config.js';
+import { getDriveFolderId, getGeminiApiKey, getAppUrl } from './lib/config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PILLARS, SCENARIOS, CERTIFICATION_RULES, getPillarQuestions, getModuleQuestions, getModuleScenarios, formatQuestionsForClient, gradeAnswers, shuffleArray } from './lib/questionBank.js';
+import { findUserByEmail, addUser, updateUser } from './lib/userStore.js';
+import { sendApprovalEmail, sendPasswordResetEmail } from './lib/email.js';
+import bcrypt from 'bcryptjs';
 
 export const config = { maxDuration: 60 };
 
@@ -133,16 +136,170 @@ RESPOND WITH ONLY a valid JSON array (no markdown, no explanation), in this exac
 ]`;
 }
 
+// --- Allowed email domains ---
+const ALLOWED_DOMAINS = ['gotravelcc.com', 'clubconcierge.com'];
+
+function isAllowedEmail(email) {
+  const domain = email.split('@')[1]?.toLowerCase();
+  return ALLOWED_DOMAINS.includes(domain);
+}
+
 // --- Route handlers ---
 
 async function handleAuthLogin(req, res) {
-  const { code } = req.body || {};
-  if (!code) return res.status(400).json({ error: 'Branch code is required' });
-  const store = loadStore();
-  const branch = store.branches.find((b) => b.code === code.toUpperCase());
-  if (!branch) return res.status(401).json({ error: 'Invalid branch code' });
-  const token = createToken(branch);
-  res.json({ token, branch: { id: branch.id, name: branch.name, code: branch.code } });
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+
+  try {
+    const user = await findUserByEmail(email);
+    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+
+    if (user.status === 'pending') return res.status(403).json({ error: 'Your registration is still pending HR approval. Please wait for the approval email.' });
+    if (user.status === 'approved') return res.status(403).json({ error: 'Your registration has been approved. Please check your email to set your password.' });
+    if (user.status !== 'active') return res.status(403).json({ error: 'Account is not active. Please contact HR.' });
+
+    const match = await bcrypt.compare(password, user.passwordHash);
+    if (!match) return res.status(401).json({ error: 'Invalid email or password' });
+
+    const token = createUserToken(user);
+    res.json({
+      token,
+      branch: { id: 1, name: 'Head Office', code: 'HO001' },
+      user: { email: user.email, name: user.name },
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Login failed. Please try again.' });
+  }
+}
+
+async function handleRegister(req, res) {
+  const { email, name } = req.body || {};
+  if (!email || !name) return res.status(400).json({ error: 'Name and email are required' });
+  if (!isAllowedEmail(email)) return res.status(400).json({ error: 'Only @gotravelcc.com and @clubconcierge.com email addresses are allowed.' });
+
+  try {
+    const existing = await findUserByEmail(email);
+    if (existing) {
+      if (existing.status === 'active') return res.status(400).json({ error: 'An account with this email already exists. Please log in.' });
+      if (existing.status === 'pending') return res.status(400).json({ error: 'A registration request for this email is already pending HR approval.' });
+      if (existing.status === 'approved') return res.status(400).json({ error: 'Your registration has been approved. Please check your email to set your password.' });
+    }
+
+    await addUser({
+      email: email.toLowerCase(),
+      name,
+      passwordHash: null,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    });
+
+    const approvalToken = createPurposeToken(email.toLowerCase(), 'approve', '72h');
+    const approvalUrl = `${getAppUrl()}/api/auth/approve/${approvalToken}`;
+    await sendApprovalEmail(name, email, approvalUrl);
+
+    res.json({ message: 'Registration submitted successfully! You will receive an email once HR approves your request.' });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ error: 'Registration failed. Please try again.' });
+  }
+}
+
+async function handleApprove(req, res, token) {
+  const payload = verifyPurposeToken(token, 'approve');
+  if (!payload) {
+    res.setHeader('Content-Type', 'text/html');
+    return res.status(400).send(`
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
+<div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
+<div style="font-size:48px;margin-bottom:16px;">&#10060;</div>
+<h1 style="color:#dc2626;font-size:22px;margin:0 0 12px;">Link Expired</h1>
+<p style="color:#6b7280;font-size:15px;">This approval link has expired or is invalid. Please ask the employee to register again.</p>
+</div></body></html>`);
+  }
+
+  try {
+    const user = await findUserByEmail(payload.email);
+    if (!user) {
+      res.setHeader('Content-Type', 'text/html');
+      return res.status(404).send(`
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
+<div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
+<div style="font-size:48px;margin-bottom:16px;">&#10060;</div>
+<h1 style="color:#dc2626;font-size:22px;margin:0 0 12px;">User Not Found</h1>
+<p style="color:#6b7280;font-size:15px;">No registration request found for this email address.</p>
+</div></body></html>`);
+    }
+
+    if (user.status === 'active') {
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(`
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
+<div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
+<div style="font-size:48px;margin-bottom:16px;">&#9989;</div>
+<h1 style="color:#16a34a;font-size:22px;margin:0 0 12px;">Already Active</h1>
+<p style="color:#6b7280;font-size:15px;">${user.name} has already set their password and is active.</p>
+</div></body></html>`);
+    }
+
+    await updateUser(payload.email, { status: 'approved', approvedAt: new Date().toISOString() });
+
+    const resetToken = createPurposeToken(payload.email, 'reset', '24h');
+    const resetUrl = `${getAppUrl()}/set-password/${resetToken}`;
+    await sendPasswordResetEmail(user.name, user.email, resetUrl);
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
+<div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
+<div style="font-size:48px;margin-bottom:16px;">&#9989;</div>
+<h1 style="color:#16a34a;font-size:22px;margin:0 0 12px;">Employee Approved!</h1>
+<p style="color:#374151;font-size:16px;font-weight:600;margin:0 0 8px;">${user.name}</p>
+<p style="color:#6b7280;font-size:14px;margin:0 0 20px;">${user.email}</p>
+<p style="color:#6b7280;font-size:15px;">A password setup email has been sent to the employee. They can set their password and start using the MRP Process Repository.</p>
+</div></body></html>`);
+  } catch (err) {
+    console.error('Approval error:', err);
+    res.setHeader('Content-Type', 'text/html');
+    res.status(500).send(`
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
+<div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
+<div style="font-size:48px;margin-bottom:16px;">&#10060;</div>
+<h1 style="color:#dc2626;font-size:22px;margin:0 0 12px;">Error</h1>
+<p style="color:#6b7280;font-size:15px;">Something went wrong processing the approval. Please try again.</p>
+</div></body></html>`);
+  }
+}
+
+async function handleSetPassword(req, res) {
+  const { token, password } = req.body || {};
+  if (!token || !password) return res.status(400).json({ error: 'Token and password are required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+
+  const payload = verifyPurposeToken(token, 'reset');
+  if (!payload) return res.status(400).json({ error: 'This link has expired or is invalid. Please contact HR for a new approval.' });
+
+  try {
+    const user = await findUserByEmail(payload.email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await updateUser(payload.email, {
+      passwordHash,
+      status: 'active',
+      activatedAt: new Date().toISOString(),
+    });
+
+    res.json({ message: 'Password set successfully! You can now log in.' });
+  } catch (err) {
+    console.error('Set password error:', err);
+    res.status(500).json({ error: 'Failed to set password. Please try again.' });
+  }
 }
 
 function handleAuthBranches(req, res) {
@@ -608,7 +765,12 @@ export default async function handler(req, res) {
 
   // Public routes (no auth)
   if (url === '/api/auth/login' && req.method === 'POST') return handleAuthLogin(req, res);
+  if (url === '/api/auth/register' && req.method === 'POST') return handleRegister(req, res);
+  if (url === '/api/auth/set-password' && req.method === 'POST') return handleSetPassword(req, res);
   if (url === '/api/auth/branches') return handleAuthBranches(req, res);
+
+  const approveMatch = url.match(/^\/api\/auth\/approve\/(.+)$/);
+  if (approveMatch && req.method === 'GET') return handleApprove(req, res, approveMatch[1]);
   if (url === '/api/health') {
     const folderId = getDriveFolderId();
     return res.json({ status: 'ok', timestamp: new Date().toISOString(), folderIdLength: folderId ? folderId.length : 0, folderIdPreview: folderId ? folderId.substring(0, 5) + '...' : 'NOT SET' });
