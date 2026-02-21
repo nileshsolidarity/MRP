@@ -136,6 +136,7 @@ export async function debugUsers() {
   let driveData = null;
   let driveError = null;
   let tmpData = null;
+  let testWriteResult = null;
 
   // Check /tmp
   try {
@@ -152,9 +153,22 @@ export async function debugUsers() {
     }
   } catch (e) { driveError = e.message; }
 
+  // Test write: if no file on Drive but we have /tmp data, try to save it now
+  if (!driveFileId && Array.isArray(tmpData) && tmpData.length > 0) {
+    try {
+      await uploadUsersToDrive(tmpData);
+      testWriteResult = 'SUCCESS — users saved to Drive!';
+      // Verify it was created
+      driveFileId = await findDriveFile();
+    } catch (e) {
+      testWriteResult = `FAILED — ${e.message}`;
+    }
+  }
+
   return {
     config: { folderId: folderId ? `${folderId.substring(0, 8)}...` : 'NOT SET', hasServiceAccount: hasCreds },
     tmp: { exists: !!tmpData, userCount: Array.isArray(tmpData) ? tmpData.length : 0, users: Array.isArray(tmpData) ? tmpData.map(u => ({ email: u.email, status: u.status })) : tmpData },
     drive: { fileId: driveFileId || 'NOT FOUND', error: driveError, userCount: Array.isArray(driveData) ? driveData.length : 0, users: Array.isArray(driveData) ? driveData.map(u => ({ email: u.email, status: u.status })) : null },
+    testWrite: testWriteResult,
   };
 }
