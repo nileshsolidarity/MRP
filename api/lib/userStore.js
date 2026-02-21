@@ -153,15 +153,25 @@ export async function debugUsers() {
     }
   } catch (e) { driveError = e.message; }
 
-  // Test write: if no file on Drive but we have /tmp data, try to save it now
-  if (!driveFileId && Array.isArray(tmpData) && tmpData.length > 0) {
+  // Force test write: always try writing to Drive to check if it works
+  if (!driveFileId) {
+    const testData = Array.isArray(tmpData) && tmpData.length > 0 ? tmpData : [{ id: 0, email: 'test@test.com', name: 'Drive Write Test', status: 'test', createdAt: new Date().toISOString() }];
     try {
-      await uploadUsersToDrive(tmpData);
-      testWriteResult = 'SUCCESS — users saved to Drive!';
-      // Verify it was created
+      await uploadUsersToDrive(testData);
+      testWriteResult = 'SUCCESS — Drive write works!';
       driveFileId = await findDriveFile();
+      // If we used test data, clean up by deleting the file
+      if (testData[0].email === 'test@test.com' && driveFileId) {
+        try {
+          const drive = getDriveWrite();
+          await drive.files.delete({ fileId: driveFileId });
+          testWriteResult += ' (test file cleaned up)';
+          driveFileId = null;
+        } catch (cleanupErr) { /* ignore cleanup errors */ }
+      }
     } catch (e) {
       testWriteResult = `FAILED — ${e.message}`;
+      if (e.stack) testWriteResult += ` | Stack: ${e.stack.split('\n').slice(0, 3).join(' > ')}`;
     }
   }
 
