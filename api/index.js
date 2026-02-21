@@ -6,7 +6,7 @@ import { generateRagResponse } from './lib/rag.js';
 import { getDriveFolderId, getGeminiApiKey, getAppUrl } from './lib/config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PILLARS, SCENARIOS, CERTIFICATION_RULES, getPillarQuestions, getModuleQuestions, getModuleScenarios, formatQuestionsForClient, gradeAnswers, shuffleArray } from './lib/questionBank.js';
-import { findUserByEmail, addUser, updateUser } from './lib/userStore.js';
+import { loadUsers, findUserByEmail, addUser, updateUser } from './lib/userStore.js';
 import { sendApprovalEmail, sendPasswordResetEmail } from './lib/email.js';
 import bcrypt from 'bcryptjs';
 
@@ -134,6 +134,13 @@ RESPOND WITH ONLY a valid JSON array (no markdown, no explanation), in this exac
     "explanation": "The Finance department approves all expense reports as stated in section 3."
   }
 ]`;
+}
+
+// --- Admin emails ---
+const ADMIN_EMAILS = ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com'];
+
+function isAdmin(branch) {
+  return branch.email && ADMIN_EMAILS.includes(branch.email.toLowerCase());
 }
 
 // --- Allowed email domains ---
@@ -526,6 +533,8 @@ function handleTestSubmit(req, res, branch, documentId) {
     branch_id: branch.branchId,
     branch_name: branch.name,
     branch_code: branch.code,
+    user_email: branch.email || null,
+    user_name: branch.userName || branch.name,
     score, total, percentage,
     passed: percentage >= 80,
     answers: results,
@@ -691,6 +700,8 @@ function handleAssessmentSubmit(req, res, branch, pillarId, moduleId) {
     branch_id: branch.branchId,
     branch_name: branch.name,
     branch_code: branch.code,
+    user_email: branch.email || null,
+    user_name: branch.userName || branch.name,
     score: graded.score,
     total: graded.total,
     percentage: graded.percentage,
@@ -755,6 +766,145 @@ function handleAssessmentScenarios(req, res, pillarId, moduleId) {
   res.json(SCENARIOS);
 }
 
+// --- Admin handlers ---
+
+async function handleAdminDashboard(req, res, branch) {
+  if (!isAdmin(branch)) return res.status(403).json({ error: 'Access denied. Admin only.' });
+
+  try {
+    const users = await loadUsers();
+    const store = loadStore();
+    const assessmentAttempts = store.assessmentAttempts || [];
+    const testAttempts = store.testAttempts || [];
+    const allAttempts = [...assessmentAttempts, ...testAttempts];
+
+    const totalUsers = users.length;
+    const activeUsers = users.filter(u => u.status === 'active').length;
+    const pendingUsers = users.filter(u => u.status === 'pending').length;
+    const approvedUsers = users.filter(u => u.status === 'approved').length;
+
+    const totalAssessmentAttempts = assessmentAttempts.length;
+    const avgScore = assessmentAttempts.length > 0
+      ? Math.round(assessmentAttempts.reduce((s, a) => s + a.percentage, 0) / assessmentAttempts.length)
+      : 0;
+    const passRate = assessmentAttempts.length > 0
+      ? Math.round((assessmentAttempts.filter(a => a.passed).length / assessmentAttempts.length) * 100)
+      : 0;
+
+    // Recent activity — last 20 assessment attempts
+    const recentActivity = [...assessmentAttempts]
+      .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
+      .slice(0, 20)
+      .map(a => {
+        const pillar = PILLARS.find(p => p.id === a.pillar_id);
+        return {
+          user_email: a.user_email || a.branch_code,
+          user_name: a.user_name || a.branch_name,
+          pillar_title: pillar ? pillar.title : `Pillar ${a.pillar_id}`,
+          module_id: a.module_id,
+          score: a.score,
+          total: a.total,
+          percentage: a.percentage,
+          passed: a.passed,
+          completed_at: a.completed_at,
+        };
+      });
+
+    res.json({ totalUsers, activeUsers, pendingUsers, approvedUsers, totalAssessmentAttempts, avgScore, passRate, recentActivity });
+  } catch (err) {
+    console.error('Admin dashboard error:', err);
+    res.status(500).json({ error: 'Failed to load dashboard' });
+  }
+}
+
+async function handleAdminUsers(req, res, branch) {
+  if (!isAdmin(branch)) return res.status(403).json({ error: 'Access denied. Admin only.' });
+
+  try {
+    const users = await loadUsers();
+    const store = loadStore();
+    const assessmentAttempts = store.assessmentAttempts || [];
+
+    const result = users.map(u => {
+      const userAttempts = assessmentAttempts.filter(a =>
+        a.user_email && a.user_email.toLowerCase() === u.email.toLowerCase()
+      );
+      const totalAttempts = userAttempts.length;
+      const avgPercentage = totalAttempts > 0
+        ? Math.round(userAttempts.reduce((s, a) => s + a.percentage, 0) / totalAttempts)
+        : 0;
+      const passRate = totalAttempts > 0
+        ? Math.round((userAttempts.filter(a => a.passed).length / totalAttempts) * 100)
+        : 0;
+      const lastActivity = userAttempts.length > 0
+        ? userAttempts.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0].completed_at
+        : null;
+      const pillarsTested = [...new Set(userAttempts.map(a => a.pillar_id))].length;
+
+      return {
+        email: u.email,
+        name: u.name,
+        status: u.status,
+        createdAt: u.createdAt,
+        approvedAt: u.approvedAt || null,
+        activatedAt: u.activatedAt || null,
+        stats: { totalAttempts, avgPercentage, passRate, lastActivityAt: lastActivity, pillarsTested },
+      };
+    });
+
+    // Sort: active first, then by name
+    result.sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('Admin users error:', err);
+    res.status(500).json({ error: 'Failed to load users' });
+  }
+}
+
+async function handleAdminUserActivity(req, res, branch, userEmail) {
+  if (!isAdmin(branch)) return res.status(403).json({ error: 'Access denied. Admin only.' });
+
+  try {
+    const users = await loadUsers();
+    const user = users.find(u => u.email.toLowerCase() === decodeURIComponent(userEmail).toLowerCase());
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const store = loadStore();
+    const assessmentAttempts = (store.assessmentAttempts || []).filter(a =>
+      a.user_email && a.user_email.toLowerCase() === user.email.toLowerCase()
+    );
+
+    const attempts = assessmentAttempts
+      .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
+      .map(a => {
+        const pillar = PILLARS.find(p => p.id === a.pillar_id);
+        return {
+          pillar_id: a.pillar_id,
+          pillar_title: pillar ? pillar.title : `Pillar ${a.pillar_id}`,
+          module_id: a.module_id,
+          score: a.score,
+          total: a.total,
+          percentage: a.percentage,
+          passed: a.passed,
+          completed_at: a.completed_at,
+        };
+      });
+
+    res.json({
+      user: { email: user.email, name: user.name, status: user.status, createdAt: user.createdAt },
+      attempts,
+    });
+  } catch (err) {
+    console.error('Admin user activity error:', err);
+    res.status(500).json({ error: 'Failed to load user activity' });
+  }
+}
+
 // --- Main router ---
 
 export default async function handler(req, res) {
@@ -798,6 +948,12 @@ export default async function handler(req, res) {
   // Protected routes
   const branch = requireAuth(req, res);
   if (!branch) return;
+
+  // Admin routes
+  if (url === '/api/admin/dashboard' && req.method === 'GET') return handleAdminDashboard(req, res, branch);
+  if (url === '/api/admin/users' && req.method === 'GET') return handleAdminUsers(req, res, branch);
+  const adminUserMatch = url.match(/^\/api\/admin\/user\/(.+)\/activity$/);
+  if (adminUserMatch && req.method === 'GET') return handleAdminUserActivity(req, res, branch, adminUserMatch[1]);
 
   if (url === '/api/processes/categories') return handleCategories(req, res, branch);
   if (url === '/api/processes' && req.method === 'GET') return handleProcesses(req, res, branch);

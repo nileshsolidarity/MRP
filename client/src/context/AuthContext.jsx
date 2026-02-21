@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
+const ADMIN_EMAILS = ['anthony.okoro@clubconcierge.com', 'ceo@gotravelcc.com'];
 
 export function AuthProvider({ children }) {
   const [branch, setBranch] = useState(null);
@@ -38,8 +39,10 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const isAdmin = user ? ADMIN_EMAILS.includes(user.email?.toLowerCase()) : false;
+
   return (
-    <AuthContext.Provider value={{ branch, token, user, loading, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ branch, token, user, loading, login, logout, isAuthenticated: !!token, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

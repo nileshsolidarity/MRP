@@ -1,5 +1,6 @@
-import { Home, FileText, MessageSquare, FolderOpen, Trophy, BookOpen } from 'lucide-react';
+import { Home, FileText, MessageSquare, FolderOpen, Trophy, BookOpen, Shield } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
@@ -10,6 +11,8 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { isAdmin } = useAuth();
+
   return (
     <aside className="w-60 bg-gray-900 text-gray-300 flex flex-col min-h-0">
       <nav className="flex-1 py-4 px-3 space-y-1">
@@ -30,6 +33,25 @@ export default function Sidebar() {
             {label}
           </NavLink>
         ))}
+
+        {isAdmin && (
+          <>
+            <div className="border-t border-gray-800 my-3" />
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
+                  isActive
+                    ? 'bg-indigo-600 text-white'
+                    : 'hover:bg-gray-800 text-indigo-400 hover:text-white'
+                }`
+              }
+            >
+              <Shield size={18} />
+              Admin Dashboard
+            </NavLink>
+          </>
+        )}
       </nav>
 
       <div className="px-3 py-4 border-t border-gray-800">

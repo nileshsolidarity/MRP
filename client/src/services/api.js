@@ -81,6 +81,13 @@ export const testApi = {
   getGlobalLeaderboard: () => request('/tests/leaderboard'),
 };
 
+// Admin
+export const adminApi = {
+  getDashboard: () => request('/admin/dashboard'),
+  getUsers: () => request('/admin/users'),
+  getUserActivity: (email) => request(`/admin/user/${encodeURIComponent(email)}/activity`),
+};
+
 // Assessment Bank (pillar/module-based)
 export const assessmentApi = {
   getPillars: () => request('/assessments/pillars'),

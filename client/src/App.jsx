@@ -12,6 +12,7 @@ import TestPage from './pages/TestPage';
 import Leaderboard from './pages/Leaderboard';
 import Assessments from './pages/Assessments';
 import AssessmentTest from './pages/AssessmentTest';
+import AdminDashboard from './pages/AdminDashboard';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -56,6 +57,7 @@ function App() {
             <Route path="assessments/:pillarId/:moduleId/test" element={<AssessmentTest />} />
             <Route path="chat" element={<Chat />} />
             <Route path="leaderboard" element={<Leaderboard />} />
+            <Route path="admin" element={<AdminDashboard />} />
           </Route>
         </Routes>
       </BrowserRouter>
