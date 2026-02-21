@@ -3,7 +3,7 @@ import { createToken, requireAuth, createUserToken, createPurposeToken, verifyPu
 import { listFiles, downloadFileContent } from './lib/drive.js';
 import { generateEmbeddings } from './lib/embedding.js';
 import { generateRagResponse } from './lib/rag.js';
-import { getDriveFolderId, getGeminiApiKey, getAppUrl } from './lib/config.js';
+import { getDriveFolderId, getGeminiApiKey, getAppUrl, getAdminEmails } from './lib/config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PILLARS, SCENARIOS, CERTIFICATION_RULES, getPillarQuestions, getModuleQuestions, getModuleScenarios, formatQuestionsForClient, gradeAnswers, shuffleArray } from './lib/questionBank.js';
 import { loadUsers, findUserByEmail, addUser, updateUser } from './lib/userStore.js';
@@ -185,25 +185,86 @@ async function handleRegister(req, res) {
   if (!email || !name) return res.status(400).json({ error: 'Name and email are required' });
   if (!isAllowedEmail(email)) return res.status(400).json({ error: 'Only @gotravelcc.com and @clubconcierge.com email addresses are allowed.' });
 
+  const emailLower = email.toLowerCase();
+  const adminEmails = getAdminEmails();
+  const isAdminEmail = adminEmails.includes(emailLower);
+
   try {
-    const existing = await findUserByEmail(email);
+    const existing = await findUserByEmail(emailLower);
     if (existing) {
       if (existing.status === 'active') return res.status(400).json({ error: 'An account with this email already exists. Please log in.' });
+      // If admin is stuck in pending, re-process them through auto-approve
+      if (existing.status === 'pending' && isAdminEmail) {
+        await updateUser(emailLower, { status: 'approved', approvedAt: new Date().toISOString() });
+        const resetToken = createPurposeToken(emailLower, 'reset', '24h');
+        const resetUrl = `${getAppUrl()}/set-password/${resetToken}`;
+        try {
+          await sendPasswordResetEmail(existing.name, existing.email, resetUrl);
+        } catch (emailErr) {
+          console.error('Email sending failed (admin auto-approve):', emailErr.message);
+        }
+        return res.json({
+          message: 'Admin account auto-approved! Use the link below to set your password.',
+          setPasswordUrl: resetUrl,
+        });
+      }
       if (existing.status === 'pending') return res.status(400).json({ error: 'A registration request for this email is already pending HR approval.' });
-      if (existing.status === 'approved') return res.status(400).json({ error: 'Your registration has been approved. Please check your email to set your password.' });
+      if (existing.status === 'approved') {
+        // Re-send set-password link
+        const resetToken = createPurposeToken(emailLower, 'reset', '24h');
+        const resetUrl = `${getAppUrl()}/set-password/${resetToken}`;
+        try {
+          await sendPasswordResetEmail(existing.name, existing.email, resetUrl);
+        } catch (emailErr) {
+          console.error('Email sending failed (re-send):', emailErr.message);
+        }
+        return res.json({
+          message: 'Your registration was already approved. A new password setup link has been generated.',
+          setPasswordUrl: resetUrl,
+        });
+      }
     }
 
+    // --- Admin auto-approval: skip HR approval step ---
+    if (isAdminEmail) {
+      await addUser({
+        email: emailLower,
+        name,
+        passwordHash: null,
+        status: 'approved',
+        createdAt: new Date().toISOString(),
+        approvedAt: new Date().toISOString(),
+      });
+
+      const resetToken = createPurposeToken(emailLower, 'reset', '24h');
+      const resetUrl = `${getAppUrl()}/set-password/${resetToken}`;
+      try {
+        await sendPasswordResetEmail(name, emailLower, resetUrl);
+      } catch (emailErr) {
+        console.error('Email sending failed (admin registration):', emailErr.message);
+      }
+      return res.json({
+        message: 'Admin account auto-approved! Use the link below to set your password.',
+        setPasswordUrl: resetUrl,
+      });
+    }
+
+    // --- Normal employee: requires HR approval ---
     await addUser({
-      email: email.toLowerCase(),
+      email: emailLower,
       name,
       passwordHash: null,
       status: 'pending',
       createdAt: new Date().toISOString(),
     });
 
-    const approvalToken = createPurposeToken(email.toLowerCase(), 'approve', '72h');
+    const approvalToken = createPurposeToken(emailLower, 'approve', '72h');
     const approvalUrl = `${getAppUrl()}/api/auth/approve/${approvalToken}`;
-    await sendApprovalEmail(name, email, approvalUrl);
+    try {
+      await sendApprovalEmail(name, email, approvalUrl);
+    } catch (emailErr) {
+      console.error('Approval email sending failed:', emailErr.message);
+    }
 
     res.json({ message: 'Registration submitted successfully! You will receive an email once HR approves your request.' });
   } catch (err) {

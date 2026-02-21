@@ -11,6 +11,8 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [setPasswordUrl, setSetPasswordUrl] = useState('');
 
   const isValidDomain = (emailValue) => {
     const domain = emailValue.split('@')[1]?.toLowerCase();
@@ -31,7 +33,9 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await authApi.register(email, name);
+      const data = await authApi.register(email, name);
+      setSuccessMessage(data.message || 'Registration submitted successfully!');
+      if (data.setPasswordUrl) setSetPasswordUrl(data.setPasswordUrl);
       setSuccess(true);
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -47,16 +51,25 @@ export default function Register() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 text-green-600 rounded-full mb-4">
             <CheckCircle size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Registration Submitted!</h1>
-          <p className="text-gray-500 mb-6">
-            Your registration request has been sent to HR for approval. You will receive an email once your account is approved, with a link to set your password.
-          </p>
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
-          >
-            Back to Login
-          </Link>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {setPasswordUrl ? 'Account Approved!' : 'Registration Submitted!'}
+          </h1>
+          <p className="text-gray-500 mb-6">{successMessage}</p>
+          {setPasswordUrl ? (
+            <a
+              href={setPasswordUrl}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
+            >
+              Set Your Password
+            </a>
+          ) : (
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+            >
+              Back to Login
+            </Link>
+          )}
         </div>
       </div>
     );
