@@ -3,7 +3,7 @@ import { createToken, requireAuth, createUserToken, createPurposeToken, verifyPu
 import { listFiles, downloadFileContent } from './lib/drive.js';
 import { generateEmbeddings } from './lib/embedding.js';
 import { generateRagResponse } from './lib/rag.js';
-import { getDriveFolderId, getGeminiApiKey, getAppUrl, getAdminEmails } from './lib/config.js';
+import { getDriveFolderId, getGeminiApiKey, getAppUrl, getAdminEmails, getResendApiKey } from './lib/config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PILLARS, SCENARIOS, CERTIFICATION_RULES, getPillarQuestions, getModuleQuestions, getModuleScenarios, formatQuestionsForClient, gradeAnswers, shuffleArray } from './lib/questionBank.js';
 import { loadUsers, findUserByEmail, addUser, updateUser, debugUsers } from './lib/userStore.js';
@@ -992,6 +992,24 @@ export default async function handler(req, res) {
       return res.json(info);
     } catch (e) {
       return res.status(500).json({ error: e.message });
+    }
+  }
+  if (url === '/api/debug-email') {
+    const resendKey = getResendApiKey();
+    if (!resendKey) return res.json({ error: 'RESEND_API_KEY is NOT SET on Vercel' });
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(resendKey);
+      const adminEmails = getAdminEmails();
+      const result = await resend.emails.send({
+        from: 'Gotravelcc <onboarding@resend.dev>',
+        to: adminEmails,
+        subject: 'Test Email — Gotravelcc Process Repository',
+        html: '<h2>This is a test email</h2><p>If you received this, email notifications are working correctly for the Gotravelcc Process Repository.</p>',
+      });
+      return res.json({ status: 'Email sent!', resendResponse: result, sentTo: adminEmails });
+    } catch (e) {
+      return res.json({ status: 'FAILED', error: e.message, errorDetails: e.response?.body || e.statusCode || null });
     }
   }
   if (url === '/api/debug-sync' && req.method === 'POST') {
