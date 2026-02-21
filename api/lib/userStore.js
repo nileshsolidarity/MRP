@@ -52,32 +52,28 @@ async function downloadUsersFromDrive() {
 }
 
 async function uploadUsersToDrive(users) {
-  try {
-    const drive = getDriveWrite();
-    const folderId = getDriveFolderId();
-    const content = JSON.stringify(users, null, 2);
-    const fileId = await findDriveFile();
+  const drive = getDriveWrite();
+  const folderId = getDriveFolderId();
+  if (!folderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID not set');
+  const content = JSON.stringify(users, null, 2);
+  const fileId = await findDriveFile();
 
-    if (fileId) {
-      // Update existing file
-      await drive.files.update({
-        fileId,
-        media: { mimeType: 'application/json', body: content },
-      });
-    } else {
-      // Create new file
-      await drive.files.create({
-        requestBody: {
-          name: DRIVE_FILENAME,
-          mimeType: 'application/json',
-          parents: [folderId],
-        },
-        media: { mimeType: 'application/json', body: content },
-      });
-    }
-  } catch (err) {
-    console.error('Error uploading users to Drive:', err.message);
-    // Don't throw — /tmp write already succeeded
+  if (fileId) {
+    await drive.files.update({
+      fileId,
+      media: { mimeType: 'application/json', body: content },
+    });
+    console.log('Users saved to Drive (updated existing file)');
+  } else {
+    await drive.files.create({
+      requestBody: {
+        name: DRIVE_FILENAME,
+        mimeType: 'application/json',
+        parents: [folderId],
+      },
+      media: { mimeType: 'application/json', body: content },
+    });
+    console.log('Users saved to Drive (created new file)');
   }
 }
 
@@ -133,4 +129,34 @@ export async function updateUser(email, fields) {
   Object.assign(users[idx], fields);
   await saveUsers(users);
   return users[idx];
+}
+
+export async function debugUsers() {
+  const folderId = getDriveFolderId();
+  const hasCreds = !!getServiceAccountCredentials();
+  let driveFileId = null;
+  let driveData = null;
+  let driveError = null;
+  let tmpData = null;
+
+  // Check /tmp
+  try {
+    if (existsSync(USERS_PATH)) {
+      tmpData = JSON.parse(readFileSync(USERS_PATH, 'utf-8'));
+    }
+  } catch (e) { tmpData = `Error: ${e.message}`; }
+
+  // Check Drive
+  try {
+    driveFileId = await findDriveFile();
+    if (driveFileId) {
+      driveData = await downloadUsersFromDrive();
+    }
+  } catch (e) { driveError = e.message; }
+
+  return {
+    config: { folderId: folderId ? `${folderId.substring(0, 8)}...` : 'NOT SET', hasServiceAccount: hasCreds },
+    tmp: { exists: !!tmpData, userCount: Array.isArray(tmpData) ? tmpData.length : 0, users: Array.isArray(tmpData) ? tmpData.map(u => ({ email: u.email, status: u.status })) : tmpData },
+    drive: { fileId: driveFileId || 'NOT FOUND', error: driveError, userCount: Array.isArray(driveData) ? driveData.length : 0, users: Array.isArray(driveData) ? driveData.map(u => ({ email: u.email, status: u.status })) : null },
+  };
 }

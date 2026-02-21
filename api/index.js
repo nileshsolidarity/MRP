@@ -6,7 +6,7 @@ import { generateRagResponse } from './lib/rag.js';
 import { getDriveFolderId, getGeminiApiKey, getAppUrl, getAdminEmails } from './lib/config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PILLARS, SCENARIOS, CERTIFICATION_RULES, getPillarQuestions, getModuleQuestions, getModuleScenarios, formatQuestionsForClient, gradeAnswers, shuffleArray } from './lib/questionBank.js';
-import { loadUsers, findUserByEmail, addUser, updateUser } from './lib/userStore.js';
+import { loadUsers, findUserByEmail, addUser, updateUser, debugUsers } from './lib/userStore.js';
 import { sendApprovalEmail, sendPasswordResetEmail } from './lib/email.js';
 import bcrypt from 'bcryptjs';
 
@@ -985,6 +985,14 @@ export default async function handler(req, res) {
   if (url === '/api/health') {
     const folderId = getDriveFolderId();
     return res.json({ status: 'ok', timestamp: new Date().toISOString(), folderIdLength: folderId ? folderId.length : 0, folderIdPreview: folderId ? folderId.substring(0, 5) + '...' : 'NOT SET' });
+  }
+  if (url === '/api/debug-users') {
+    try {
+      const info = await debugUsers();
+      return res.json(info);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
   if (url === '/api/debug-sync' && req.method === 'POST') {
     try {
