@@ -5,6 +5,7 @@ import { generateEmbeddings } from './lib/embedding.js';
 import { generateRagResponse } from './lib/rag.js';
 import { getDriveFolderId, getGeminiApiKey } from './lib/config.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { PILLARS, SCENARIOS, CERTIFICATION_RULES, getPillarQuestions, getModuleQuestions, getModuleScenarios, formatQuestionsForClient, gradeAnswers, shuffleArray } from './lib/questionBank.js';
 
 export const config = { maxDuration: 60 };
 
@@ -422,6 +423,181 @@ function handleGlobalLeaderboard(req, res, branch) {
   res.json(leaderboard);
 }
 
+// --- Assessment Bank handlers ---
+
+function handleAssessmentPillars(req, res) {
+  const pillars = PILLARS.map(p => ({
+    id: p.id,
+    title: p.title,
+    certification: p.certification,
+    audience: p.audience,
+    passMark: p.passMark,
+    timeMinutes: p.timeMinutes,
+    moduleCount: p.modules.length,
+    questionCount: p.modules.reduce((sum, m) => sum + m.questions.length, 0),
+  }));
+  res.json({ pillars, rules: CERTIFICATION_RULES });
+}
+
+function handleAssessmentPillarDetail(req, res, pillarId) {
+  const pillar = PILLARS.find(p => p.id === parseInt(pillarId));
+  if (!pillar) return res.status(404).json({ error: 'Pillar not found' });
+  res.json({
+    id: pillar.id,
+    title: pillar.title,
+    certification: pillar.certification,
+    audience: pillar.audience,
+    passMark: pillar.passMark,
+    timeMinutes: pillar.timeMinutes,
+    modules: pillar.modules.map(m => ({
+      id: m.id,
+      title: m.title,
+      duration: m.duration,
+      questionCount: m.questions.length,
+      scenarioCount: m.scenarios ? m.scenarios.length : 0,
+    })),
+  });
+}
+
+function handleAssessmentStart(req, res, branch, pillarId, moduleId) {
+  let questions;
+  if (moduleId === 'all') {
+    questions = getPillarQuestions(parseInt(pillarId));
+  } else {
+    questions = getModuleQuestions(parseInt(pillarId), moduleId);
+  }
+  if (!questions || questions.length === 0)
+    return res.status(404).json({ error: 'No questions found for this module' });
+
+  const shuffled = shuffleArray(questions);
+  const formatted = formatQuestionsForClient(shuffled);
+
+  // Store the question order so we can grade later
+  const store = loadStore();
+  const testSessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  if (!store.assessmentSessions) store.assessmentSessions = {};
+  store.assessmentSessions[testSessionId] = {
+    pillarId: parseInt(pillarId),
+    moduleId,
+    branchId: branch.branchId,
+    questionIds: shuffled.map(q => q.id),
+    startedAt: new Date().toISOString(),
+  };
+  saveStore(store);
+
+  res.json({
+    sessionId: testSessionId,
+    pillarId: parseInt(pillarId),
+    moduleId,
+    questions: formatted,
+    totalQuestions: formatted.length,
+    passMark: CERTIFICATION_RULES.passMark,
+  });
+}
+
+function handleAssessmentSubmit(req, res, branch, pillarId, moduleId) {
+  const { answers, sessionId } = req.body || {};
+  if (!answers || !Array.isArray(answers))
+    return res.status(400).json({ error: 'Answers array is required' });
+
+  const store = loadStore();
+
+  // Recover the question order from session
+  let questionIds;
+  if (sessionId && store.assessmentSessions && store.assessmentSessions[sessionId]) {
+    questionIds = store.assessmentSessions[sessionId].questionIds;
+    delete store.assessmentSessions[sessionId]; // Clean up
+  }
+
+  // Get the actual questions in the right order
+  let allQuestions;
+  if (moduleId === 'all') {
+    allQuestions = getPillarQuestions(parseInt(pillarId));
+  } else {
+    allQuestions = getModuleQuestions(parseInt(pillarId), moduleId);
+  }
+
+  // Reorder to match session if available
+  let orderedQuestions = allQuestions;
+  if (questionIds) {
+    orderedQuestions = questionIds.map(id => allQuestions.find(q => q.id === id)).filter(Boolean);
+  }
+
+  const graded = gradeAnswers(orderedQuestions, answers);
+
+  // Store attempt
+  if (!store.assessmentAttempts) store.assessmentAttempts = [];
+  const attempt = {
+    id: (store.assessmentAttempts.length || 0) + 1,
+    pillar_id: parseInt(pillarId),
+    module_id: moduleId,
+    branch_id: branch.branchId,
+    branch_name: branch.name,
+    branch_code: branch.code,
+    score: graded.score,
+    total: graded.total,
+    percentage: graded.percentage,
+    passed: graded.passed,
+    answers: graded.results,
+    completed_at: new Date().toISOString(),
+  };
+
+  store.assessmentAttempts.push(attempt);
+  saveStore(store);
+
+  res.json(attempt);
+}
+
+function handleAssessmentLeaderboard(req, res, branch, pillarId) {
+  const store = loadStore();
+  const attempts = (store.assessmentAttempts || []).filter(a => {
+    if (pillarId) return a.pillar_id === parseInt(pillarId);
+    return true;
+  });
+
+  if (!pillarId) {
+    // Global leaderboard: average across all pillars per branch
+    const branchData = {};
+    for (const a of attempts) {
+      if (!branchData[a.branch_id]) branchData[a.branch_id] = { attempts: [], name: a.branch_name, code: a.branch_code };
+      branchData[a.branch_id].attempts.push(a);
+    }
+    const leaderboard = Object.values(branchData).map(bd => {
+      const best = {};
+      for (const a of bd.attempts) {
+        const key = `${a.pillar_id}_${a.module_id}`;
+        if (!best[key] || a.percentage > best[key].percentage) best[key] = a;
+      }
+      const bestArr = Object.values(best);
+      const avgPct = Math.round(bestArr.reduce((s, a) => s + a.percentage, 0) / bestArr.length);
+      return { branch_name: bd.name, branch_code: bd.code, tests_taken: bestArr.length, average_percentage: avgPct, tests_passed: bestArr.filter(a => a.passed).length };
+    }).sort((a, b) => b.average_percentage - a.average_percentage);
+    leaderboard.forEach((e, i) => e.rank = i + 1);
+    return res.json(leaderboard);
+  }
+
+  // Per-pillar leaderboard: best score per branch
+  const bestByBranch = {};
+  for (const a of attempts) {
+    if (!bestByBranch[a.branch_id] || a.percentage > bestByBranch[a.branch_id].percentage) {
+      bestByBranch[a.branch_id] = a;
+    }
+  }
+  const leaderboard = Object.values(bestByBranch)
+    .sort((a, b) => b.percentage - a.percentage)
+    .map((a, i) => ({ rank: i + 1, branch_name: a.branch_name, branch_code: a.branch_code, score: a.score, total: a.total, percentage: a.percentage, passed: a.passed, completed_at: a.completed_at }));
+  res.json(leaderboard);
+}
+
+function handleAssessmentScenarios(req, res, pillarId, moduleId) {
+  if (pillarId && moduleId) {
+    const scenarios = getModuleScenarios(parseInt(pillarId), moduleId);
+    return res.json(scenarios);
+  }
+  // Return cross-pillar scenarios
+  res.json(SCENARIOS);
+}
+
 // --- Main router ---
 
 export default async function handler(req, res) {
@@ -466,7 +642,29 @@ export default async function handler(req, res) {
   if (url === '/api/sync' && req.method === 'POST') return handleSync(req, res, branch);
   if (url === '/api/chat' && req.method === 'POST') return handleChat(req, res, branch);
 
-  // Test routes
+  // Assessment Bank routes
+  if (url === '/api/assessments/pillars' && req.method === 'GET') return handleAssessmentPillars(req, res);
+
+  const pillarDetailMatch = url.match(/^\/api\/assessments\/pillars\/(\d+)$/);
+  if (pillarDetailMatch && req.method === 'GET') return handleAssessmentPillarDetail(req, res, pillarDetailMatch[1]);
+
+  const assessStartMatch = url.match(/^\/api\/assessments\/start\/(\d+)\/(.+)$/);
+  if (assessStartMatch && req.method === 'POST') return handleAssessmentStart(req, res, branch, assessStartMatch[1], assessStartMatch[2]);
+
+  const assessSubmitMatch = url.match(/^\/api\/assessments\/submit\/(\d+)\/(.+)$/);
+  if (assessSubmitMatch && req.method === 'POST') return handleAssessmentSubmit(req, res, branch, assessSubmitMatch[1], assessSubmitMatch[2]);
+
+  const assessLeaderboardPillarMatch = url.match(/^\/api\/assessments\/leaderboard\/(\d+)$/);
+  if (assessLeaderboardPillarMatch && req.method === 'GET') return handleAssessmentLeaderboard(req, res, branch, assessLeaderboardPillarMatch[1]);
+
+  if (url === '/api/assessments/leaderboard' && req.method === 'GET') return handleAssessmentLeaderboard(req, res, branch, null);
+
+  if (url === '/api/assessments/scenarios' && req.method === 'GET') return handleAssessmentScenarios(req, res, null, null);
+
+  const assessScenariosMatch = url.match(/^\/api\/assessments\/scenarios\/(\d+)\/(.+)$/);
+  if (assessScenariosMatch && req.method === 'GET') return handleAssessmentScenarios(req, res, assessScenariosMatch[1], assessScenariosMatch[2]);
+
+  // Test routes (legacy AI-generated)
   const testGenerateMatch = url.match(/^\/api\/tests\/generate\/(\d+)$/);
   if (testGenerateMatch && req.method === 'POST') return handleTestGenerate(req, res, branch, testGenerateMatch[1]);
 

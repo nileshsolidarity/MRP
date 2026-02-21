@@ -8,6 +8,8 @@ import ProcessDetail from './pages/ProcessDetail';
 import Chat from './pages/Chat';
 import TestPage from './pages/TestPage';
 import Leaderboard from './pages/Leaderboard';
+import Assessments from './pages/Assessments';
+import AssessmentTest from './pages/AssessmentTest';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -45,6 +47,9 @@ function App() {
             <Route path="processes" element={<Processes />} />
             <Route path="processes/:id" element={<ProcessDetail />} />
             <Route path="processes/:id/test" element={<TestPage />} />
+            <Route path="assessments" element={<Assessments />} />
+            <Route path="assessments/:pillarId" element={<Assessments />} />
+            <Route path="assessments/:pillarId/:moduleId/test" element={<AssessmentTest />} />
             <Route path="chat" element={<Chat />} />
             <Route path="leaderboard" element={<Leaderboard />} />
           </Route>

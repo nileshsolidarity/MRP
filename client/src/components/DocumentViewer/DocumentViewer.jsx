@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { processApi } from '../../services/api';
-import { ArrowLeft, ExternalLink, Calendar, Tag, FileText, Loader2, ClipboardCheck } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Calendar, Tag, FileText, Loader2, ClipboardCheck, BookOpen } from 'lucide-react';
 
 export default function DocumentViewer() {
   const { id } = useParams();
@@ -74,11 +74,11 @@ export default function DocumentViewer() {
             </div>
             <div className="flex items-center gap-2">
               <Link
-                to={`/processes/${doc.id}/test`}
+                to="/assessments"
                 className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition"
               >
-                <ClipboardCheck size={14} />
-                Take Test
+                <BookOpen size={14} />
+                Assessments
               </Link>
               {doc.drive_url && (
                 <a

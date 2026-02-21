@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { testApi } from '../services/api';
+import { assessmentApi } from '../services/api';
 import { Trophy, Loader2 } from 'lucide-react';
 import LeaderboardTable from '../components/Test/LeaderboardTable';
 
@@ -10,7 +10,7 @@ export default function Leaderboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    testApi.getGlobalLeaderboard()
+    assessmentApi.getGlobalLeaderboard()
       .then(setLeaderboard)
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -24,7 +24,7 @@ export default function Leaderboard() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Global Leaderboard</h1>
-          <p className="text-sm text-gray-500">Best scores across all process tests</p>
+          <p className="text-sm text-gray-500">Best scores across all training assessments</p>
         </div>
       </div>
 

@@ -1,9 +1,10 @@
-import { Home, FileText, MessageSquare, FolderOpen, Trophy } from 'lucide-react';
+import { Home, FileText, MessageSquare, FolderOpen, Trophy, BookOpen } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
   { to: '/processes', icon: FileText, label: 'Processes' },
+  { to: '/assessments', icon: BookOpen, label: 'Assessments' },
   { to: '/chat', icon: MessageSquare, label: 'AI Assistant' },
   { to: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
 ];

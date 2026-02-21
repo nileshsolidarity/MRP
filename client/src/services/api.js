@@ -68,7 +68,7 @@ export const chatApi = {
   getMessages: (sessionId) => request(`/chat/sessions/${sessionId}/messages`),
 };
 
-// Tests
+// Tests (legacy AI-generated)
 export const testApi = {
   generate: (processId) => request(`/tests/generate/${processId}`, { method: 'POST' }),
   getQuestions: (processId) => request(`/tests/questions/${processId}`),
@@ -76,4 +76,19 @@ export const testApi = {
   getAttempts: (processId) => request(`/tests/attempts/${processId}`),
   getLeaderboard: (processId) => request(`/tests/leaderboard/${processId}`),
   getGlobalLeaderboard: () => request('/tests/leaderboard'),
+};
+
+// Assessment Bank (pillar/module-based)
+export const assessmentApi = {
+  getPillars: () => request('/assessments/pillars'),
+  getPillarDetail: (pillarId) => request(`/assessments/pillars/${pillarId}`),
+  startTest: (pillarId, moduleId) => request(`/assessments/start/${pillarId}/${moduleId}`, { method: 'POST' }),
+  submitTest: (pillarId, moduleId, answers, sessionId) =>
+    request(`/assessments/submit/${pillarId}/${moduleId}`, {
+      method: 'POST',
+      body: JSON.stringify({ answers, sessionId }),
+    }),
+  getLeaderboard: (pillarId) => request(`/assessments/leaderboard/${pillarId}`),
+  getGlobalLeaderboard: () => request('/assessments/leaderboard'),
+  getScenarios: () => request('/assessments/scenarios'),
 };
