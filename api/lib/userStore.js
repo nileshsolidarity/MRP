@@ -172,10 +172,23 @@ export async function debugUsers() {
     testWriteResult = 'SETUP REQUIRED — Please create a file named "mrp-users-data.json" with content [] in your Google Drive folder. Service accounts cannot create files (no storage quota), but they CAN update existing files.';
   }
 
+  // List all files in the Drive folder to help diagnose issues
+  let folderFiles = [];
+  try {
+    const drive = getDriveWrite();
+    const listRes = await drive.files.list({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: 'files(id, name, mimeType)',
+      pageSize: 50,
+    });
+    folderFiles = (listRes.data.files || []).map(f => ({ name: f.name, mimeType: f.mimeType, id: f.id.substring(0, 8) + '...' }));
+  } catch (e) { folderFiles = [{ error: e.message }]; }
+
   return {
     config: { folderId: folderId ? `${folderId.substring(0, 8)}...` : 'NOT SET', hasServiceAccount: hasCreds, serviceAccountEmail },
     tmp: { exists: !!tmpData, userCount: Array.isArray(tmpData) ? tmpData.length : 0, users: Array.isArray(tmpData) ? tmpData.map(u => ({ email: u.email, status: u.status })) : tmpData },
     drive: { fileId: driveFileId || 'NOT FOUND', error: driveError, userCount: Array.isArray(driveData) ? driveData.length : 0, users: Array.isArray(driveData) ? driveData.map(u => ({ email: u.email, status: u.status })) : null },
     testWrite: testWriteResult,
+    folderContents: folderFiles,
   };
 }
