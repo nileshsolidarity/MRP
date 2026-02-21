@@ -14,7 +14,7 @@ function getDriveWrite() {
     const credentials = JSON.parse(credJson);
     const auth = new google.auth.GoogleAuth({
       credentials,
-      scopes: ['https://www.googleapis.com/auth/drive.file'],
+      scopes: ['https://www.googleapis.com/auth/drive'],
     });
     driveWriteClient = google.drive({ version: 'v3', auth });
   }
@@ -24,9 +24,9 @@ function getDriveWrite() {
 async function findDriveFile() {
   try {
     const drive = getDriveWrite();
-    const folderId = getDriveFolderId();
+    // Search service account's entire Drive for the users file (not limited to shared folder)
     const res = await drive.files.list({
-      q: `name = '${DRIVE_FILENAME}' and '${folderId}' in parents and trashed = false`,
+      q: `name = '${DRIVE_FILENAME}' and trashed = false`,
       fields: 'files(id, name)',
       pageSize: 1,
     });
@@ -53,8 +53,6 @@ async function downloadUsersFromDrive() {
 
 async function uploadUsersToDrive(users) {
   const drive = getDriveWrite();
-  const folderId = getDriveFolderId();
-  if (!folderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID not set');
   const content = JSON.stringify(users, null, 2);
   const fileId = await findDriveFile();
 
@@ -65,15 +63,15 @@ async function uploadUsersToDrive(users) {
     });
     console.log('Users saved to Drive (updated existing file)');
   } else {
+    // Create in service account's own Drive root (no parent folder — avoids permission issues)
     await drive.files.create({
       requestBody: {
         name: DRIVE_FILENAME,
         mimeType: 'application/json',
-        parents: [folderId],
       },
       media: { mimeType: 'application/json', body: content },
     });
-    console.log('Users saved to Drive (created new file)');
+    console.log('Users saved to Drive (created new file in service account root)');
   }
 }
 
