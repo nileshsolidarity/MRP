@@ -134,7 +134,15 @@ export async function updateUser(email, fields) {
 
 export async function debugUsers() {
   const folderId = getDriveFolderId();
-  const hasCreds = !!getServiceAccountCredentials();
+  const credJson = getServiceAccountCredentials();
+  const hasCreds = !!credJson;
+  let serviceAccountEmail = null;
+  try {
+    if (credJson) {
+      const creds = JSON.parse(credJson);
+      serviceAccountEmail = creds.client_email || null;
+    }
+  } catch (e) { /* ignore parse error */ }
   let driveFileId = null;
   let driveData = null;
   let driveError = null;
@@ -179,7 +187,7 @@ export async function debugUsers() {
   }
 
   return {
-    config: { folderId: folderId ? `${folderId.substring(0, 8)}...` : 'NOT SET', hasServiceAccount: hasCreds },
+    config: { folderId: folderId ? `${folderId.substring(0, 8)}...` : 'NOT SET', hasServiceAccount: hasCreds, serviceAccountEmail },
     tmp: { exists: !!tmpData, userCount: Array.isArray(tmpData) ? tmpData.length : 0, users: Array.isArray(tmpData) ? tmpData.map(u => ({ email: u.email, status: u.status })) : tmpData },
     drive: { fileId: driveFileId || 'NOT FOUND', error: driveError, userCount: Array.isArray(driveData) ? driveData.length : 0, users: Array.isArray(driveData) ? driveData.map(u => ({ email: u.email, status: u.status })) : null },
     testWrite: testWriteResult,
