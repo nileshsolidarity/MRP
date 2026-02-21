@@ -25,7 +25,6 @@ async function findDriveFile() {
   try {
     const drive = getDriveWrite();
     const folderId = getDriveFolderId();
-    // Search in the shared folder (which has storage quota, unlike service account root)
     const res = await drive.files.list({
       q: `name = '${DRIVE_FILENAME}' and '${folderId}' in parents and trashed = false`,
       fields: 'files(id, name)',
@@ -54,28 +53,20 @@ async function downloadUsersFromDrive() {
 
 async function uploadUsersToDrive(users) {
   const drive = getDriveWrite();
-  const folderId = getDriveFolderId();
   const content = JSON.stringify(users, null, 2);
   const fileId = await findDriveFile();
 
-  if (fileId) {
-    await drive.files.update({
-      fileId,
-      media: { mimeType: 'application/json', body: content },
-    });
-    console.log('Users saved to Drive (updated existing file)');
-  } else {
-    // Create in the shared folder (service accounts have no storage quota of their own)
-    await drive.files.create({
-      requestBody: {
-        name: DRIVE_FILENAME,
-        mimeType: 'application/json',
-        parents: [folderId],
-      },
-      media: { mimeType: 'application/json', body: content },
-    });
-    console.log('Users saved to Drive (created new file in shared folder)');
+  if (!fileId) {
+    console.error('Drive file not found. Please create a file named "mrp-users-data.json" with content [] in the Drive folder.');
+    throw new Error('SETUP REQUIRED: Create a file named "mrp-users-data.json" with content [] in your Google Drive folder.');
   }
+
+  // Only UPDATE the existing file (service accounts cannot create files — no storage quota)
+  await drive.files.update({
+    fileId,
+    media: { mimeType: 'application/json', body: content },
+  });
+  console.log('Users saved to Drive (updated existing file)');
 }
 
 export async function loadUsers() {
@@ -164,26 +155,21 @@ export async function debugUsers() {
     }
   } catch (e) { driveError = e.message; }
 
-  // Force test write: always try writing to Drive to check if it works
-  if (!driveFileId) {
-    const testData = Array.isArray(tmpData) && tmpData.length > 0 ? tmpData : [{ id: 0, email: 'test@test.com', name: 'Drive Write Test', status: 'test', createdAt: new Date().toISOString() }];
+  // Test update write if file exists on Drive
+  if (driveFileId) {
     try {
-      await uploadUsersToDrive(testData);
-      testWriteResult = 'SUCCESS — Drive write works!';
-      driveFileId = await findDriveFile();
-      // If we used test data, clean up by deleting the file
-      if (testData[0].email === 'test@test.com' && driveFileId) {
-        try {
-          const drive = getDriveWrite();
-          await drive.files.delete({ fileId: driveFileId });
-          testWriteResult += ' (test file cleaned up)';
-          driveFileId = null;
-        } catch (cleanupErr) { /* ignore cleanup errors */ }
-      }
+      const drive = getDriveWrite();
+      const testContent = JSON.stringify(Array.isArray(driveData) ? driveData : [], null, 2);
+      await drive.files.update({
+        fileId: driveFileId,
+        media: { mimeType: 'application/json', body: testContent },
+      });
+      testWriteResult = 'SUCCESS — Drive update works!';
     } catch (e) {
-      testWriteResult = `FAILED — ${e.message}`;
-      if (e.stack) testWriteResult += ` | Stack: ${e.stack.split('\n').slice(0, 3).join(' > ')}`;
+      testWriteResult = `UPDATE FAILED — ${e.message}`;
     }
+  } else {
+    testWriteResult = 'SETUP REQUIRED — Please create a file named "mrp-users-data.json" with content [] in your Google Drive folder. Service accounts cannot create files (no storage quota), but they CAN update existing files.';
   }
 
   return {
