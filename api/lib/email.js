@@ -12,7 +12,7 @@ export async function sendApprovalEmail(applicantName, applicantEmail, approvalU
   const hrEmail = getHrApprovalEmail();
 
   await resend.emails.send({
-    from: 'MRP Group <onboarding@resend.dev>',
+    from: 'Gotravelcc <onboarding@resend.dev>',
     to: hrEmail,
     subject: `Employee Registration Approval: ${applicantName}`,
     html: `
@@ -22,12 +22,12 @@ export async function sendApprovalEmail(applicantName, applicantEmail, approvalU
 <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;">
   <div style="max-width:480px;margin:30px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
     <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:32px 24px;text-align:center;">
-      <h1 style="color:#ffffff;margin:0;font-size:22px;">MRP Group</h1>
+      <h1 style="color:#ffffff;margin:0;font-size:22px;">Gotravelcc</h1>
       <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Employee Registration Request</p>
     </div>
     <div style="padding:32px 24px;">
       <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 16px;">
-        A new employee has requested access to the MRP Process Repository:
+        A new employee has requested access to the Gotravelcc Process Repository:
       </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px;">
         <p style="margin:0 0 8px;color:#64748b;font-size:13px;">Name</p>
@@ -52,9 +52,9 @@ export async function sendPasswordResetEmail(userName, userEmail, resetUrl) {
   const resend = getResend();
 
   await resend.emails.send({
-    from: 'MRP Group <onboarding@resend.dev>',
+    from: 'Gotravelcc <onboarding@resend.dev>',
     to: userEmail,
-    subject: 'Set Your Password — MRP Group Process Repository',
+    subject: 'Set Your Password — Gotravelcc Process Repository',
     html: `
 <!DOCTYPE html>
 <html>
@@ -62,7 +62,7 @@ export async function sendPasswordResetEmail(userName, userEmail, resetUrl) {
 <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;">
   <div style="max-width:480px;margin:30px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
     <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:32px 24px;text-align:center;">
-      <h1 style="color:#ffffff;margin:0;font-size:22px;">MRP Group</h1>
+      <h1 style="color:#ffffff;margin:0;font-size:22px;">Gotravelcc</h1>
       <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Welcome to the Process Repository</p>
     </div>
     <div style="padding:32px 24px;">
@@ -70,7 +70,7 @@ export async function sendPasswordResetEmail(userName, userEmail, resetUrl) {
         Hi ${userName},
       </p>
       <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 24px;">
-        Your registration has been approved! Please set your password to start using the MRP Process Repository.
+        Your registration has been approved! Please set your password to start using the Gotravelcc Process Repository.
       </p>
       <a href="${resetUrl}" style="display:block;background:#2563eb;color:#ffffff;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;font-size:16px;font-weight:600;">
         Set My Password

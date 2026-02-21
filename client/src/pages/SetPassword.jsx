@@ -47,7 +47,7 @@ export default function SetPassword() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Password Set!</h1>
           <p className="text-gray-500 mb-6">
-            Your password has been set successfully. You can now log in to the MRP Process Repository.
+            Your password has been set successfully. You can now log in to the Gotravelcc Process Repository.
           </p>
           <Link
             to="/login"
@@ -90,7 +90,7 @@ export default function SetPassword() {
             <Building2 size={32} />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Set Your Password</h1>
-          <p className="text-gray-500 mt-1">Create a password for your MRP Group account</p>
+          <p className="text-gray-500 mt-1">Create a password for your Gotravelcc account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

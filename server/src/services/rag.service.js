@@ -72,7 +72,7 @@ export async function* generateRagResponse(userMessage, chatHistory = []) {
   const context = contextParts.join('\n\n---\n\n');
 
   // 4. Build the prompt
-  const systemPrompt = `You are a helpful MRP Group Process Repository AI Assistant. You help employees find and understand Standard Operating Procedures (SOPs) and company policies.
+  const systemPrompt = `You are a helpful Gotravelcc Process Repository AI Assistant. You help employees find and understand Standard Operating Procedures (SOPs) and company policies.
 
 RULES:
 - Answer questions based ONLY on the provided context from company documents.

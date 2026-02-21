@@ -70,7 +70,7 @@ export default function Register() {
             <Building2 size={32} />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Employee Registration</h1>
-          <p className="text-gray-500 mt-1">MRP Group Process Repository</p>
+          <p className="text-gray-500 mt-1">Gotravelcc Process Repository</p>
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-6">

@@ -210,7 +210,7 @@ async function handleApprove(req, res, token) {
   if (!payload) {
     res.setHeader('Content-Type', 'text/html');
     return res.status(400).send(`
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gotravelcc</title></head>
 <body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
 <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
 <div style="font-size:48px;margin-bottom:16px;">&#10060;</div>
@@ -224,7 +224,7 @@ async function handleApprove(req, res, token) {
     if (!user) {
       res.setHeader('Content-Type', 'text/html');
       return res.status(404).send(`
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gotravelcc</title></head>
 <body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
 <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
 <div style="font-size:48px;margin-bottom:16px;">&#10060;</div>
@@ -236,7 +236,7 @@ async function handleApprove(req, res, token) {
     if (user.status === 'active') {
       res.setHeader('Content-Type', 'text/html');
       return res.send(`
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gotravelcc</title></head>
 <body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
 <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
 <div style="font-size:48px;margin-bottom:16px;">&#9989;</div>
@@ -253,20 +253,20 @@ async function handleApprove(req, res, token) {
 
     res.setHeader('Content-Type', 'text/html');
     res.send(`
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gotravelcc</title></head>
 <body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
 <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
 <div style="font-size:48px;margin-bottom:16px;">&#9989;</div>
 <h1 style="color:#16a34a;font-size:22px;margin:0 0 12px;">Employee Approved!</h1>
 <p style="color:#374151;font-size:16px;font-weight:600;margin:0 0 8px;">${user.name}</p>
 <p style="color:#6b7280;font-size:14px;margin:0 0 20px;">${user.email}</p>
-<p style="color:#6b7280;font-size:15px;">A password setup email has been sent to the employee. They can set their password and start using the MRP Process Repository.</p>
+<p style="color:#6b7280;font-size:15px;">A password setup email has been sent to the employee. They can set their password and start using the Gotravelcc Process Repository.</p>
 </div></body></html>`);
   } catch (err) {
     console.error('Approval error:', err);
     res.setHeader('Content-Type', 'text/html');
     res.status(500).send(`
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>MRP Group</title></head>
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gotravelcc</title></head>
 <body style="margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f3f4f6;text-align:center;">
 <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 24px;box-shadow:0 4px 12px rgba(0,0,0,.1);">
 <div style="font-size:48px;margin-bottom:16px;">&#10060;</div>

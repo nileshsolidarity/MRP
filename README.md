@@ -1,6 +1,6 @@
-# MRP Group - Process Repository
+# Gotravelcc - Process Repository
 
-A web application that serves as a centralized repository of SOPs & Policies for MRP Group employees. Documents are stored in Google Drive and an AI chatbot powered by **Google Gemini** helps employees find and understand processes.
+A web application that serves as a centralized repository of SOPs & Policies for Gotravelcc employees. Documents are stored in Google Drive and an AI chatbot powered by **Google Gemini** helps employees find and understand processes.
 
 ## Features
 

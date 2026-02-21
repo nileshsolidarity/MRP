@@ -26,7 +26,7 @@ export default function Header() {
           <Building2 size={24} />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-gray-900">MRP Group</h1>
+          <h1 className="text-lg font-bold text-gray-900">Gotravelcc</h1>
           <p className="text-xs text-gray-500">Process Repository - SOPs & Policies</p>
         </div>
       </div>

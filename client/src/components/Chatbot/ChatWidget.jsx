@@ -19,7 +19,7 @@ export default function ChatWidget() {
         <div className="flex items-center gap-2">
           <Bot size={20} />
           <div>
-            <h3 className="font-semibold text-sm">MRP Group AI Assistant</h3>
+            <h3 className="font-semibold text-sm">Gotravelcc AI Assistant</h3>
             <p className="text-xs text-blue-200">Powered by Gemini AI</p>
           </div>
         </div>

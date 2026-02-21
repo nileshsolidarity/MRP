@@ -1,5 +1,5 @@
 // Complete Training Assessment Bank — 245 MCQs + 15 Scenarios + 4 Exercises
-// MRP Group — Multi-Vertical Travel Management Company
+// Gotravelcc — Multi-Vertical Travel Management Company
 // All 6 Pillars | MCQs | Scenarios | Exercises — With Correct Answers & Explanations
 
 export const PILLARS = [
