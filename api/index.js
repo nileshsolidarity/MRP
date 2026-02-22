@@ -966,6 +966,50 @@ async function handleAdminUserActivity(req, res, branch, userEmail) {
   }
 }
 
+async function handleAdminApproveUser(req, res, branch) {
+  if (!isAdmin(branch)) return res.status(403).json({ error: 'Access denied. Admin only.' });
+
+  const { email, action } = req.body || {};
+  if (!email || !action) return res.status(400).json({ error: 'Email and action are required' });
+  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Action must be "approve" or "reject"' });
+
+  try {
+    const user = await findUserByEmail(email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (action === 'reject') {
+      await updateUser(email, { status: 'rejected', rejectedAt: new Date().toISOString() });
+      return res.json({ message: `${user.name} has been rejected.` });
+    }
+
+    // Approve
+    if (user.status === 'active') return res.json({ message: `${user.name} is already active.` });
+
+    await updateUser(email, { status: 'approved', approvedAt: new Date().toISOString() });
+
+    const resetToken = createPurposeToken(email.toLowerCase(), 'reset', '24h');
+    const resetUrl = `${getAppUrl()}/set-password/${resetToken}`;
+
+    // Try to send email, but don't fail if it doesn't work
+    let emailSent = false;
+    try {
+      await sendPasswordResetEmail(user.name, user.email, resetUrl);
+      emailSent = true;
+    } catch (emailErr) {
+      console.error('Password reset email failed:', emailErr.message);
+    }
+
+    res.json({
+      message: `${user.name} has been approved!`,
+      emailSent,
+      setPasswordUrl: resetUrl,
+    });
+  } catch (err) {
+    console.error('Admin approve error:', err);
+    res.status(500).json({ error: 'Failed to process approval' });
+  }
+}
+
 // --- Main router ---
 
 export default async function handler(req, res) {
@@ -1039,6 +1083,7 @@ export default async function handler(req, res) {
   // Admin routes
   if (url === '/api/admin/dashboard' && req.method === 'GET') return handleAdminDashboard(req, res, branch);
   if (url === '/api/admin/users' && req.method === 'GET') return handleAdminUsers(req, res, branch);
+  if (url === '/api/admin/approve-user' && req.method === 'POST') return handleAdminApproveUser(req, res, branch);
   const adminUserMatch = url.match(/^\/api\/admin\/user\/(.+)\/activity$/);
   if (adminUserMatch && req.method === 'GET') return handleAdminUserActivity(req, res, branch, adminUserMatch[1]);
 

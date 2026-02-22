@@ -86,6 +86,7 @@ export const adminApi = {
   getDashboard: () => request('/admin/dashboard'),
   getUsers: () => request('/admin/users'),
   getUserActivity: (email) => request(`/admin/user/${encodeURIComponent(email)}/activity`),
+  approveUser: (email, action) => request('/admin/approve-user', { method: 'POST', body: JSON.stringify({ email, action }) }),
 };
 
 // Assessment Bank (pillar/module-based)

@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { adminApi } from '../services/api';
 import {
   Shield, Users, Clock, Award, TrendingUp, Loader2,
-  ChevronDown, ChevronRight, CheckCircle, XCircle, UserCheck, UserX, Activity
+  ChevronDown, ChevronRight, CheckCircle, XCircle, UserCheck, UserX, Activity,
+  AlertCircle, Copy, ExternalLink
 } from 'lucide-react';
 
 function StatCard({ icon: Icon, label, value, color, sub }) {
@@ -151,6 +152,109 @@ function EmployeeRow({ user, onToggle, isExpanded, activity }) {
   );
 }
 
+function PendingApprovals({ pendingUsers, onAction }) {
+  const [processing, setProcessing] = useState({});
+  const [results, setResults] = useState({});
+
+  const handleAction = async (email, action) => {
+    setProcessing(prev => ({ ...prev, [email]: action }));
+    try {
+      const data = await adminApi.approveUser(email, action);
+      setResults(prev => ({ ...prev, [email]: data }));
+      if (onAction) onAction();
+    } catch (err) {
+      setResults(prev => ({ ...prev, [email]: { error: err.message } }));
+    } finally {
+      setProcessing(prev => ({ ...prev, [email]: null }));
+    }
+  };
+
+  const copyLink = (url) => {
+    navigator.clipboard.writeText(url);
+  };
+
+  if (pendingUsers.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-yellow-200 overflow-hidden mb-8">
+      <div className="px-5 py-4 border-b border-yellow-100 bg-yellow-50 flex items-center gap-2">
+        <AlertCircle size={18} className="text-yellow-600" />
+        <h2 className="font-semibold text-yellow-800">Pending Registrations</h2>
+        <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full ml-1">{pendingUsers.length}</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {pendingUsers.map(user => {
+          const result = results[user.email];
+          const isProcessing = processing[user.email];
+
+          return (
+            <div key={user.email} className="px-5 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">{user.name}</p>
+                  <p className="text-sm text-gray-500">{user.email}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Registered {timeAgo(user.createdAt)}</p>
+                </div>
+                {result ? (
+                  <div className="text-right">
+                    {result.error ? (
+                      <p className="text-sm text-red-600">{result.error}</p>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-green-600 font-medium">{result.message}</p>
+                        {result.setPasswordUrl && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              onClick={() => copyLink(result.setPasswordUrl)}
+                              className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition"
+                            >
+                              <Copy size={12} /> Copy Password Link
+                            </button>
+                            <a
+                              href={result.setPasswordUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition"
+                            >
+                              <ExternalLink size={12} /> Open
+                            </a>
+                            {!result.emailSent && (
+                              <span className="text-xs text-yellow-600">(Email not sent — share link manually)</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleAction(user.email, 'approve')}
+                      disabled={!!isProcessing}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+                    >
+                      {isProcessing === 'approve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleAction(user.email, 'reject')}
+                      disabled={!!isProcessing}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition disabled:opacity-50"
+                    >
+                      {isProcessing === 'reject' ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const { isAdmin } = useAuth();
   const [dashboard, setDashboard] = useState(null);
@@ -160,13 +264,20 @@ export default function AdminDashboard() {
   const [userActivities, setUserActivities] = useState({});
   const [error, setError] = useState('');
 
+  const loadData = () => {
+    return Promise.all([adminApi.getDashboard(), adminApi.getUsers()])
+      .then(([d, u]) => { setDashboard(d); setUsers(u); })
+      .catch(err => setError(err.message));
+  };
+
   useEffect(() => {
     if (!isAdmin) return;
-    Promise.all([adminApi.getDashboard(), adminApi.getUsers()])
-      .then(([d, u]) => { setDashboard(d); setUsers(u); })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+    loadData().finally(() => setLoading(false));
   }, [isAdmin]);
+
+  const refreshAfterAction = () => {
+    loadData();
+  };
 
   const toggleUser = async (email) => {
     if (expandedEmail === email) {
@@ -232,6 +343,12 @@ export default function AdminDashboard() {
           <StatCard icon={TrendingUp} label="Avg Score" value={`${dashboard.avgScore}%`} color="purple" sub={`${dashboard.passRate}% pass rate`} />
         </div>
       )}
+
+      {/* Pending Approvals */}
+      <PendingApprovals
+        pendingUsers={users.filter(u => u.status === 'pending')}
+        onAction={refreshAfterAction}
+      />
 
       {/* Employee Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-8">
